@@ -88,9 +88,11 @@ import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.google.accompanist.permissions.shouldShowRationale
 import android.provider.Settings  // For Settings.ACTION_APPLICATION_DETAILS_SETTINGS
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.compose.animation.core.EaseInOutCubic
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.collectAsState
@@ -99,6 +101,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -112,7 +115,31 @@ import ir.ehsannarmani.compose_charts.models.AnimationMode
 import ir.ehsannarmani.compose_charts.models.Line
 import ir.ehsannarmani.compose_charts.models.LineProperties
 import ir.ehsannarmani.compose_charts.models.ZeroLineProperties
-
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.material.icons.filled.AccountBox
+import androidx.compose.material.icons.filled.NorthEast
+import androidx.compose.material.icons.filled.SouthWest
+import androidx.compose.material.icons.outlined.AccountBox
+import androidx.compose.material.icons.outlined.CopyAll
+import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.TextFieldValue
+import ir.ehsannarmani.compose_charts.models.DotProperties
+import ir.ehsannarmani.compose_charts.models.GridProperties
+import ir.ehsannarmani.compose_charts.models.HorizontalIndicatorProperties
+import ir.ehsannarmani.compose_charts.models.LabelHelperProperties
+import ir.ehsannarmani.compose_charts.models.LabelProperties
+import ir.ehsannarmani.compose_charts.models.StrokeStyle
+import ir.ehsannarmani.compose_charts.models.VerticalIndicatorProperties
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -215,25 +242,47 @@ fun MainScreen(viewModel:WalletViewModel = viewModel()) {
                 )
             },
             bottomBar = {
-                NavigationBar (modifier = Modifier.onGloballyPositioned { layoutCoordinates ->
-                    navigationBarHeight.value = with(density) { layoutCoordinates.size.height.toDp() }}
-                ){
-
-                    items1.forEachIndexed { index, item ->
-                        NavigationBarItem(
-                            icon = {
-                                Icon(
-                                    if (selectedItem == index) selectedIcons[index] else unselectedIcons[index],
-                                    contentDescription = item
-                                )
-                            },
-                            label = { Text(item) },
-                            selected = selectedItem == index,
-                            onClick = { selectedItem = index},
-                        )
-
+                Box(
+                    modifier = Modifier
+                        .padding(16.dp) // space around the nav bar
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp)) // rounded corners
+                        .border(0.5.dp, MaterialTheme.colorScheme.onSurface, RoundedCornerShape(12.dp)) // black border
+                        .background(MaterialTheme.colorScheme.surface) // white background
+                ) {
+                    NavigationBar(
+                        containerColor = Color.Transparent, // so background from Box shows through
+                        tonalElevation = 0.dp, // remove shadow
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onGloballyPositioned { layoutCoordinates ->
+                                navigationBarHeight.value = with(density) { layoutCoordinates.size.height.toDp() }
+                            }
+                    ) {
+                        items1.forEachIndexed { index, item ->
+                            NavigationBarItem(
+                                icon = {
+                                    Icon(
+                                        if (selectedItem == index) selectedIcons[index] else unselectedIcons[index],
+                                        contentDescription = item,
+                                        tint = Color.Black // consistent black icons
+                                    )
+                                },
+                                label = {
+                                    Text(
+                                        text = item,
+                                        color = Color.Black
+                                    )
+                                },
+                                selected = selectedItem == index,
+                                onClick = { selectedItem = index },
+                                alwaysShowLabel = true,
+                                modifier=Modifier.align(Alignment.CenterVertically)
+                            )
+                        }
                     }
                 }
+
             },
             content = { innerPadding ->
                 Box(modifier = Modifier.padding(innerPadding)) {
@@ -321,8 +370,11 @@ fun Dashboard(
     error: String?,
     transactions: List<Transaction>
 ) {
+    var text by remember { mutableStateOf("") }
+    val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
+
     LazyColumn(
-        contentPadding = paddingValues,
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
@@ -431,6 +483,7 @@ fun Dashboard(
                                 contentColor = MaterialTheme.colorScheme.onSurface
                             )
                         ) {
+                            Icon(Icons.Filled.NorthEast, contentDescription = "Send")
                             Text("Send")
                         }
 
@@ -443,12 +496,68 @@ fun Dashboard(
                                 contentColor = MaterialTheme.colorScheme.onSurface
                             )
                         ) {
+                            Icon(Icons.Filled.SouthWest, contentDescription = "Receive")
                             Text("Receive")
                         }
                     }
                 }
             }
         }
+
+        item {
+            // Balance Card
+            OutlinedCard(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
+                modifier = Modifier.fillMaxWidth(),
+                border = BorderStroke(0.2.dp, MaterialTheme.colorScheme.onSurface),
+
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.Start
+                ) {
+                    Text(
+                        text = "Wallet Address",
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontSize = 28.sp
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    TextField(
+                        value = text,
+                        onValueChange = { text = it },
+                        label = { Text("Enter text") },
+                        trailingIcon = {
+                            IconButton(onClick = {
+                                clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(text))
+                                Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
+                            }) {
+                                Icon(Icons.Outlined.CopyAll, contentDescription = "Copy")
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        colors = TextFieldDefaults.colors(
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent,
+                            disabledIndicatorColor = Color.Transparent,
+                            errorIndicatorColor = Color.Transparent,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+
+                        ),
+                        shape = RoundedCornerShape(10), // Fully rounded corners
+
+                    )
+
+                }
+            }
+        }
+
+
 
         item {
             if (isLoading) {
@@ -458,12 +567,13 @@ fun Dashboard(
                         .padding(16.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                 //   CircularProgressIndicator()
+                    CircularProgressIndicator()
                 }
             } else {
-            //    TransactionDeltaLineChart(viewModel = WalletViewModel())
+                MonochromeLineChart(viewModel = WalletViewModel())
             }
         }
+
 
 
     }
@@ -504,6 +614,7 @@ fun TransactionDeltaLineChart(viewModel: WalletViewModel) {
         LineChart(
             modifier = Modifier
                 .fillMaxSize()
+                .height(200.dp)
                 .padding(horizontal = 22.dp),
             data = line,
             animationMode = AnimationMode.Together(delayBuilder = { it * 500L }),
@@ -516,6 +627,111 @@ fun TransactionDeltaLineChart(viewModel: WalletViewModel) {
 
         )
 
+    }
+}
+
+fun List<Transaction>.toBlackWhiteChart(color: Color): Line {
+    val values = map { tx ->
+        if (tx.type == "in") tx.amount else -tx.amount
+    }
+    return Line(
+        label = "Monochrome",
+        values = values + (-0.5)+ 0.5 + (-0.5)+0.5,
+        color = SolidColor(color),
+        drawStyle = ir.ehsannarmani.compose_charts.models.DrawStyle.Stroke(
+            width = 3.dp,
+            strokeStyle = StrokeStyle.Dashed(
+                intervals = floatArrayOf(8f, 6f), // 8px dash, 6px space
+                phase = 0f
+            )
+        ),
+
+    )
+}
+fun getExampleTransactions(): List<Transaction> {
+    return listOf(
+        Transaction(type = "out", amount = 0.4, fee = 0.01),
+        Transaction(type = "out", amount = 0.56, fee = 0.01),
+        Transaction(type = "in", amount = 0.25, fee = 0.0),
+        Transaction(type = "out", amount = 0.58, fee = 0.02),
+        Transaction(type = "in", amount = 0.22, fee = 0.0),
+        Transaction(type = "out", amount = 0.72, fee = 0.01),
+        Transaction(type = "in", amount = 0.67, fee = 0.0),
+        Transaction(type = "in", amount = 0.24, fee = 0.0),
+        Transaction(type = "in", amount = 0.23, fee = 0.0),
+        Transaction(type = "out", amount = 0.28, fee = 0.01),
+        Transaction(type = "out", amount = 0.27, fee = 0.01),
+        Transaction(type = "in", amount = 0.76, fee = 0.0),
+        Transaction(type = "in", amount = 0.46, fee = 0.0),
+        Transaction(type = "in", amount = 0.78, fee = 0.0),
+        Transaction(type = "in", amount = 0.59, fee = 0.0)
+    )
+}
+
+@Composable
+fun MonochromeLineChart(viewModel: WalletViewModel) {
+    val transactions by viewModel.transactions.collectAsState()
+    val dataToShow = if (transactions.isNotEmpty()) transactions else getExampleTransactions()
+    if (true) {
+        val themeColor = MaterialTheme.colorScheme.onSurface
+
+        val line = remember(dataToShow, themeColor) {
+            listOf(dataToShow.toBlackWhiteChart(themeColor))
+        }
+
+
+        LineChart(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(200.dp)
+                .padding(horizontal = 22.dp),
+            data = line,
+            animationMode = AnimationMode.Together(delayBuilder = { it * 300L }),
+            zeroLineProperties = ZeroLineProperties(
+                enabled = true,
+                color = SolidColor(Color.Gray),
+            ),
+            minValue = -1.0,
+            maxValue = 1.0,
+            gridProperties = GridProperties(
+                enabled = false,
+
+
+            ),
+            dotsProperties = DotProperties(
+                enabled = true,
+                color = SolidColor(MaterialTheme.colorScheme.onSurface),
+                strokeWidth = 4.dp,
+                radius = 7.dp,
+                strokeColor = SolidColor(MaterialTheme.colorScheme.surface),
+            ),
+            labelProperties = LabelProperties(
+                enabled = true,
+                textStyle = TextStyle(
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            ),
+            indicatorProperties = HorizontalIndicatorProperties(
+                enabled = true,
+                textStyle = TextStyle(
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+            ),
+            labelHelperProperties = LabelHelperProperties(
+                enabled = true,
+                textStyle = TextStyle(
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            ),
+
+        )
     }
 }
 

@@ -94,5 +94,6 @@ dependencies {
     implementation ("com.google.code.gson:gson:2.8.8")
 
     implementation ("io.github.ehsannarmani:compose-charts:0.1.2")
+    implementation (libs.androidx.material.icons.extended)
 
 }
