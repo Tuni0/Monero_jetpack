@@ -64,21 +64,21 @@ dependencies {
     // Compose UI
     implementation(libs.ui)
     // Import the BoM for the Firebase platform
-    implementation(platform("com.google.firebase:firebase-bom:33.12.0"))
+    implementation(libs.firebase.bom)
 
     // Add the dependency for the Firebase Authentication library
     // When using the BoM, you don't specify versions in Firebase library dependencies
-    implementation("com.google.firebase:firebase-auth")
+    implementation(libs.google.firebase.auth)
 
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services.auth)
     implementation (libs.googleid)
-    implementation ("com.google.android.gms:play-services-auth:21.3.0")
+    implementation (libs.play.services.auth)
 
     implementation ("com.google.zxing:core:3.5.2")
 
-    implementation ("com.google.mlkit:barcode-scanning:17.3.0")
-    implementation ("com.google.android.gms:play-services-mlkit-barcode-scanning:18.2.0")
+    implementation (libs.barcode.scanning)
+    implementation ("com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.1")
     implementation ("com.journeyapps:zxing-android-embedded:4.3.0")
     implementation (libs.accompanist.permissions)
 
@@ -86,14 +86,16 @@ dependencies {
     implementation ("com.squareup.retrofit2:converter-gson:2.9.0")
     implementation ("com.squareup.okhttp3:logging-interceptor:4.9.1")
 
-    implementation ("androidx.lifecycle:lifecycle-viewmodel-ktx:2.6.0")
+    implementation (libs.androidx.lifecycle.viewmodel.ktx)
     implementation ("androidx.lifecycle:lifecycle-runtime-ktx:2.6.0")
-    implementation ("androidx.lifecycle:lifecycle-viewmodel-compose:2.6.0")
+    implementation ("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation ("com.squareup.okhttp3:okhttp:4.10.0")
 
-    implementation ("com.google.code.gson:gson:2.8.8")
+    implementation ("com.google.code.gson:gson:2.10.1")
 
     implementation ("io.github.ehsannarmani:compose-charts:0.1.2")
     implementation (libs.androidx.material.icons.extended)
+    implementation(libs.accompanist.swiperefresh)
+
 
 }

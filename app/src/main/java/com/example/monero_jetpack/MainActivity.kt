@@ -89,6 +89,7 @@ import com.google.accompanist.permissions.shouldShowRationale
 import android.provider.Settings  // For Settings.ACTION_APPLICATION_DETAILS_SETTINGS
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.EaseInOutCubic
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
@@ -128,11 +129,13 @@ import androidx.compose.material.icons.filled.SouthWest
 import androidx.compose.material.icons.outlined.AccountBox
 import androidx.compose.material.icons.outlined.CopyAll
 import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -147,12 +150,24 @@ import ir.ehsannarmani.compose_charts.models.LabelHelperProperties
 import ir.ehsannarmani.compose_charts.models.LabelProperties
 import ir.ehsannarmani.compose_charts.models.StrokeStyle
 import ir.ehsannarmani.compose_charts.models.VerticalIndicatorProperties
+import com.google.accompanist.swiperefresh.SwipeRefresh
+import com.google.accompanist.swiperefresh.rememberSwipeRefreshState
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.SystemBarStyle
+import androidx.compose.ui.graphics.toArgb
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+
         super.onCreate(savedInstanceState)
 
         setContent {
+            enableEdgeToEdge(
+                navigationBarStyle = SystemBarStyle.auto(
+                    lightScrim = MaterialTheme.colorScheme.surface.toArgb(),
+                    darkScrim = MaterialTheme.colorScheme.surface.toArgb()
+                )
+            )
             Monero_jetpackTheme {
                 // A surface container using the 'background' color from the theme
                 Surface(
@@ -181,6 +196,8 @@ fun MainScreen(viewModel:WalletViewModel = viewModel()) {
     val isLoading by viewModel.isLoading.collectAsState()
     val error by viewModel.error.collectAsState()
     val transactions by viewModel.transactions.collectAsState()
+    val address by viewModel.accountAddress.collectAsState()
+    val accountBalanceUsd by viewModel.accountBalanceUsd.collectAsState()
     val context = LocalContext.current
     var selectedItem by remember { mutableIntStateOf(0) }
     val items1 = listOf("Home", "Contacts", "Payments")
@@ -192,9 +209,11 @@ fun MainScreen(viewModel:WalletViewModel = viewModel()) {
 
     val navigationBarHeight = remember { mutableStateOf(0.dp) }
     val density = LocalDensity.current
+    val cleanAddress = address.replace("\"", "")
 
 
     var flag by remember { mutableStateOf(false) }
+
 
     Box(modifier = Modifier.fillMaxSize()) {
 
@@ -287,7 +306,11 @@ fun MainScreen(viewModel:WalletViewModel = viewModel()) {
                         accountBalance = accountBalance,
                         isLoading = isLoading,
                         error = error,
-                        transactions = transactions)
+                        transactions = transactions,
+                        address = address,
+                        accountBalanceUsd = accountBalanceUsd,
+                        onRefresh = { viewModel.fetchWalletData() } // 🚀 This will re-run all network calls
+                    )
 
 
                 }
@@ -344,10 +367,10 @@ fun MainScreen(viewModel:WalletViewModel = viewModel()) {
     }
     // Show QR Code Fullscreen When Activated
     if (showQRCode) {
-        QRCodeScreen("https://yourwebsite.com", onDismiss = { showQRCode = false })
+        QRCodeScreen(address, balance = accountBalance , balanceUsd = accountBalanceUsd,onDismiss = { showQRCode = false }, cleanAddress = cleanAddress )
     }
     if(showPayment){
-        TransactionCard(onClose = { showPayment = false }, onSend = { qrCode, amount -> showPayment = false })
+        TransactionCard(onDismiss = { showPayment = false }, onSend = { qrCode, amount -> showPayment = false })
     }
 }
 
@@ -362,269 +385,74 @@ fun Dashboard(
     accountBalance: String,
     isLoading: Boolean,
     error: String?,
-    transactions: List<Transaction>
+    transactions: List<Transaction>,
+    address: String,
+    accountBalanceUsd: String,
+    onRefresh: () -> Unit
+
 ) {
     var text by remember { mutableStateOf("") }
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
     val recentTransactions = transactions.takeLast(4).reversed()
+    val cleanAddress = address.replace("\"", "")
+    val refreshState = rememberSwipeRefreshState(isRefreshing = isLoading)
 
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        item {
-            // User Info Card
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = {})
-            ) {
-                Row(
+    SwipeRefresh(state = refreshState, onRefresh = onRefresh) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            item {
+                // User Info Card
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                    ),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .clickable(onClick = {})
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .background(
-                                color = MaterialTheme.colorScheme.surfaceDim,
-                                shape = CircleShape
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Person,
-                            contentDescription = "Person",
-                            tint = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-
-                    Column(
-                        modifier = Modifier
-                            .padding(start = 16.dp),
-                        horizontalAlignment = Alignment.Start
-                    ) {
-                        Text(
-                            text = "User's Wallet",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Spacer(modifier = Modifier.size(8.dp))
-                        Text(
-                            text = accountName,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                }
-            }
-        }
-
-        item {
-            // Balance Card
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.onSurface
-                ),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalAlignment = Alignment.Start
-                ) {
-                    Text(
-                        text = "Total Balance",
-                        color = MaterialTheme.colorScheme.inverseOnSurface,
-                        fontSize = 14.sp
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "$accountBalance",
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.inverseOnSurface
-                    )
-                    Text(
-                        text = "text",
-                        fontSize = 16.sp,
-                        color = MaterialTheme.colorScheme.inverseOnSurface
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        Button(
-                            onClick = { /* Send */ },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(8.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.surface,
-                                contentColor = MaterialTheme.colorScheme.onSurface
-                            )
-                        ) {
-                            Icon(Icons.Filled.NorthEast, contentDescription = "Send")
-                            Text("Send")
-                        }
-
-                        Button(
-                            onClick = { /* Receive */ },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(8.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.surface,
-                                contentColor = MaterialTheme.colorScheme.onSurface
-                            )
-                        ) {
-                            Icon(Icons.Filled.SouthWest, contentDescription = "Receive")
-                            Text("Receive")
-                        }
-                    }
-                }
-            }
-        }
-
-        item {
-            // Balance Card
-            OutlinedCard(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                ),
-                modifier = Modifier.fillMaxWidth(),
-                border = BorderStroke(0.2.dp, MaterialTheme.colorScheme.onSurface),
-
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalAlignment = Alignment.Start
-                ) {
-                    Text(
-                        text = "Wallet Address",
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontSize = 28.sp
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    TextField(
-                        value = text,
-                        onValueChange = { text = it },
-                        label = { Text("Enter text") },
-                        trailingIcon = {
-                            IconButton(onClick = {
-                                clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(text))
-                                Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
-                            }) {
-                                Icon(Icons.Outlined.CopyAll, contentDescription = "Copy")
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
                             .padding(16.dp),
-                        colors = TextFieldDefaults.colors(
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent,
-                            disabledIndicatorColor = Color.Transparent,
-                            errorIndicatorColor = Color.Transparent,
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-
-                        ),
-                        shape = RoundedCornerShape(10), // Fully rounded corners
-
-                    )
-
-                }
-            }
-        }
-
-
-
-        item {
-            if (isLoading) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator()
-                }
-            } else {
-                MonochromeLineChart(viewModel = WalletViewModel())
-            }
-        }
-
-        item{
-            OutlinedCard(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.onSurface),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "Recent Transactions",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    getExampleTransactions().forEach { tx ->
-                        val isIncome = tx.type == "in"
-                        val icon = if (isIncome) Icons.Filled.SouthWest else Icons.Filled.NorthEast
-                        val bgColor = if (isIncome) Color(0xFFDFFFE3) else Color(0xFFFFE3E3)
-                        val iconColor = if (isIncome) Color(0xFF0BAF3C) else Color(0xFFE53935)
-                        val formattedAmount = (if (isIncome) "+" else "-") + "${tx.amount} XMR"
-
-                        Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                                .size(48.dp)
+                                .background(
+                                    color = MaterialTheme.colorScheme.surfaceDim,
+                                    shape = CircleShape
+                                ),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .clip(CircleShape)
-                                        .background(bgColor),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = icon,
-                                        contentDescription = null,
-                                        tint = iconColor,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Column {
-                                    Text("Jane Doe", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                                    Text("2 hours ago", fontSize = 12.sp, color = Color.Gray)
-                                }
-                            }
+                            Icon(
+                                imageVector = Icons.Default.Person,
+                                contentDescription = "Person",
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+
+                        Column(
+                            modifier = Modifier
+                                .padding(start = 16.dp),
+                            horizontalAlignment = Alignment.Start
+                        ) {
                             Text(
-                                text = formattedAmount,
+                                text = "User's Wallet",
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.size(8.dp))
+                            Text(
+                                text = accountName,
+                                fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
@@ -632,11 +460,228 @@ fun Dashboard(
                     }
                 }
             }
+
+            item {
+                // Balance Card
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.onSurface
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalAlignment = Alignment.Start
+                    ) {
+                        Text(
+                            text = "Total Balance",
+                            color = MaterialTheme.colorScheme.inverseOnSurface,
+                            fontSize = 14.sp
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "$accountBalance",
+                            fontSize = 28.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.inverseOnSurface
+                        )
+                        Text(
+                            text = "$accountBalanceUsd",
+                            fontSize = 16.sp,
+                            color = MaterialTheme.colorScheme.inverseOnSurface
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Button(
+                                onClick = { /* Send */ },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.surface,
+                                    contentColor = MaterialTheme.colorScheme.onSurface
+                                )
+                            ) {
+                                Icon(Icons.Filled.NorthEast, contentDescription = "Send")
+                                Text("Send")
+                            }
+
+                            Button(
+                                onClick = { /* Receive */ },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.surface,
+                                    contentColor = MaterialTheme.colorScheme.onSurface
+                                )
+                            ) {
+                                Icon(Icons.Filled.SouthWest, contentDescription = "Receive")
+                                Text("Receive")
+                            }
+                        }
+                    }
+                }
+            }
+
+            item {
+                // Balance Card
+                OutlinedCard(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                    border = BorderStroke(0.2.dp, MaterialTheme.colorScheme.onSurface),
+
+                    ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+                        Text(
+                            text = "Wallet Address",
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontSize = 28.sp
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        TextField(
+                            value = cleanAddress,
+                            onValueChange = { text = it },
+                            readOnly = true,
+                            label = { Text("Address") },
+                            trailingIcon = {
+                                IconButton(onClick = {
+                                    clipboardManager.setText(
+                                        androidx.compose.ui.text.AnnotatedString(
+                                            text
+                                        )
+                                    )
+                                    Toast.makeText(
+                                        context,
+                                        "Copied to clipboard",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }) {
+                                    Icon(Icons.Outlined.CopyAll, contentDescription = "Copy")
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth(),
+                            colors = TextFieldDefaults.colors(
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                                disabledIndicatorColor = Color.Transparent,
+                                errorIndicatorColor = Color.Transparent,
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+
+                            ),
+                            shape = RoundedCornerShape(10), // Fully rounded corners
+
+                        )
+
+                    }
+                }
+            }
+
+
+
+            item {
+                if (isLoading) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                } else {
+                    MonochromeLineChart(viewModel = WalletViewModel())
+                }
+            }
+
+            item {
+                OutlinedCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.onSurface),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "Recent Transactions",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        recentTransactions.forEach { tx ->
+                            val isIncome = tx.type == "in"
+                            val icon =
+                                if (isIncome) Icons.Filled.SouthWest else Icons.Filled.NorthEast
+                            val bgColor = if (isIncome) Color(0xFFDFFFE3) else Color(0xFFFFE3E3)
+                            val iconColor = if (isIncome) Color(0xFF0BAF3C) else Color(0xFFE53935)
+                            val formattedAmount = (if (isIncome) "+" else "-") + "${tx.amount} XMR"
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(CircleShape)
+                                            .background(bgColor),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = icon,
+                                            contentDescription = null,
+                                            tint = iconColor,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column {
+                                        Text(
+                                            tx.type,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 14.sp
+                                        )
+                                        Text(
+                                            "Fee: ${tx.fee} XMR",
+                                            fontSize = 12.sp,
+                                            color = Color.Gray
+                                        )
+                                    }
+                                }
+                                Text(
+                                    text = formattedAmount,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+
         }
-
-
-
-
     }
 }
 
@@ -879,85 +924,171 @@ fun generateQRCode(text: String, size: Int = 512): Bitmap? {
         null
     }
 }
-
 @Composable
-fun QRCodeScreen(inputText: String, onDismiss: () -> Unit) {
+fun QRCodeScreen(
+    inputText: String,
+    balance: String,
+    balanceUsd: String,
+    onDismiss: () -> Unit,
+    cleanAddress: String
+) {
     val qrBitmap = remember(inputText) { generateQRCode(inputText) }
+    val clipboardManager = LocalClipboardManager.current
     var isVisible by remember { mutableStateOf(false) }
-
-    // Delay animation until composable is fully loaded
+    var text by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    BackHandler {
+        onDismiss()
+    }
     LaunchedEffect(Unit) {
         isVisible = true
+        text = cleanAddress // Set the text on entry
     }
-        AnimatedVisibility(
-            visible = isVisible,
-            enter = slideInVertically(
-                initialOffsetY = { it }, // Start from bottom of screen
-                animationSpec = tween(durationMillis = 500) // Smooth animation
-            ),
-            exit = slideOutVertically(
-                targetOffsetY = { it }, // Exit to bottom
-                animationSpec = tween(durationMillis = 300)
-            )
-        ) {
-    Box( // Ensure full screen coverage
-        modifier = Modifier
-            .fillMaxSize()
-            .zIndex(3f)
-            .clickable {
-                isVisible = false // Trigger exit animation
-                onDismiss()
-            }
 
+    AnimatedVisibility(
+        visible = isVisible,
+        enter = slideInVertically(
+            initialOffsetY = { it },
+            animationSpec = tween(durationMillis = 500)
+        ),
+        exit = slideOutVertically(
+            targetOffsetY = { it },
+            animationSpec = tween(durationMillis = 300)
+        )
     ) {
-        Card(
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                contentColor = MaterialTheme.colorScheme.secondary
-            ),
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(400.dp)
-                .padding(0.dp) // Ensure no extra padding
-                .align(alignment = Alignment.BottomCenter)
-                .clickable(enabled = false) {} // Prevents clicks on the card from closing it
-
+                .fillMaxSize()
         ) {
-            Column(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
+            // Dismiss background (outside card)
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(Color.Black.copy(alpha = 0.5f))
+                    .clickable { onDismiss() }
+            )
+
+            // Actual Card content
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .padding(16.dp)
+                    .clickable(enabled = false) {}, // Prevents click events from bubbling up
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
-                qrBitmap?.let {
-                    Image(
-                        bitmap = it.asImageBitmap(),
-                        contentDescription = "Generated QR Code",
-                        modifier = Modifier.size(200.dp)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Balance Info
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            "Total Balance",
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = balance,
+                            fontSize = 28.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = balanceUsd,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 16.sp
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    // QR Section
+                    Text("Share your address to receive funds", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    qrBitmap?.let {
+                        Image(
+                            bitmap = it.asImageBitmap(),
+                            contentDescription = "QR Code",
+                            modifier = Modifier.size(200.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text("Share your address to receive funds", color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    TextField(
+                        value = cleanAddress,
+                        onValueChange = { text = it },
+                        readOnly = true,
+                        label = { Text("Address") },
+                        trailingIcon = {
+                            IconButton(onClick = {
+                                clipboardManager.setText(AnnotatedString(cleanAddress))
+                                Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
+                            }) {
+                                Icon(Icons.Outlined.CopyAll, contentDescription = "Copy")
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = TextFieldDefaults.colors(
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent,
+                            disabledIndicatorColor = Color.Transparent,
+                            errorIndicatorColor = Color.Transparent,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                        ),
+                        shape = RoundedCornerShape(10)
                     )
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Button(
+                        onClick = { /* TODO: share logic */ },
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.inverseSurface)
+                    ) {
+                        Text("Share", color = MaterialTheme.colorScheme.surface)
+                    }
                 }
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(text = inputText, color = Color.White)
             }
         }
     }
-    }
 }
-
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun TransactionCard(
-    onClose: () -> Unit,
+    onDismiss: () -> Unit,
     onSend: (String, String) -> Unit,
 ) {
     val context = LocalContext.current
     var qrCodeText by remember { mutableStateOf("") }
     var amountText by remember { mutableStateOf("") }
 
-    // Camera permission state - using the new API
-    val permissionState = rememberPermissionState(Manifest.permission.CAMERA)
+    val totalBalance = 2.45
+    val totalBalanceUsd = 491.22
 
-    // Result launcher for QR scanner
+    val amountValue = amountText.replace(',', '.').toDoubleOrNull() ?: 0.0
+    val showNewBalance = amountValue > 0.0
+    val newBalance = totalBalance - amountValue
+    val newBalanceUsd = totalBalanceUsd - (totalBalanceUsd / totalBalance * amountValue)
+
+    val quickAmounts = listOf("0.01", "0.1", "0.5", "1.0", "2.45")
+
+    val permissionState = rememberPermissionState(Manifest.permission.CAMERA)
     val scanLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -965,107 +1096,223 @@ fun TransactionCard(
             qrCodeText = result.data?.getStringExtra("SCAN_RESULT") ?: ""
         }
     }
+    val selectedAmount = amountText.replace(',', '.')
 
-    // Check permission when launched
+    var isVisible by remember { mutableStateOf(false) }
+
+    BackHandler {
+        onDismiss()
+    }
     LaunchedEffect(Unit) {
+        isVisible = true
         if (!permissionState.status.isGranted) {
             permissionState.launchPermissionRequest()
         }
+
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        Card(
+    AnimatedVisibility(
+        visible = isVisible,
+        enter = slideInVertically(
+            initialOffsetY = { it },
+            animationSpec = tween(durationMillis = 500)
+        ),
+        exit = slideOutVertically(
+            targetOffsetY = { it },
+            animationSpec = tween(durationMillis = 300)
+        )
+    ) {
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            elevation = CardDefaults.cardElevation(8.dp)
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                // Close Button
-                IconButton(
-                    onClick = onClose,
-                    modifier = Modifier.align(Alignment.Start)
+                .fillMaxSize()
+        ){
+            // Dismiss background (outside card)
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(Color.Black.copy(alpha = 0.5f))
+                    .clickable { onDismiss() }
+            )
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .padding(16.dp)
+                    .clickable(enabled = false) {}, // Prevents click events from bubbling up
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Icon(imageVector = Icons.Filled.Close, contentDescription = "Close")
-                }
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Spacer(modifier = Modifier.height(8.dp))
 
-                Spacer(modifier = Modifier.height(8.dp))
+                        // Total balance
+                        Text("Total Balance", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "${"%.2f".format(totalBalance)} XMR",
+                            style = MaterialTheme.typography.headlineMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            "$ ${"%.2f".format(totalBalanceUsd)} USD",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
 
-                // QR Code Input with one button for scanning
-                OutlinedTextField(
-                    value = qrCodeText,
-                    onValueChange = { qrCodeText = it },
-                    label = { Text("QR Code") },
-                    trailingIcon = {
-                        // Only one button to scan QR code, checking for permission before launching
-                        when {
-                            permissionState.status.isGranted -> {
-                                IconButton(onClick = {
-                                    val intent = Intent(context, QrScannerActivity::class.java)
-                                    scanLauncher.launch(intent)
-                                }) {
-                                    Icon(
-                                        imageVector = ImageVector.vectorResource(id = R.drawable.qr_code_24px),
-                                        contentDescription = "Scan QR Code"
-                                    )
-                                }
-                            }
-                            permissionState.status.shouldShowRationale -> {
-                                // If permission is denied and should show rationale, display rationale button
-                                IconButton(onClick = { permissionState.launchPermissionRequest() }) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Warning,
-                                        contentDescription = "Grant Camera Permission"
-                                    )
-                                }
-                            }
-                            else -> {
-                                // If permission is denied and we can't show rationale, show button to open settings
-                                IconButton(onClick = {
-                                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                        data = Uri.fromParts("package", context.packageName, null)
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        if (showNewBalance) {
+                            Text(
+                                text = "Total Balance after transfer",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                            Text(
+                                "${"%.2f".format(newBalance)} XMR",
+                                style = MaterialTheme.typography.headlineMedium,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                            Text(
+                                "$ ${"%.2f".format(newBalanceUsd)} USD",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.error
+                            )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                    }
+
+                    Text(
+                        "Transfer Monero to another wallet",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = qrCodeText,
+                        onValueChange = { qrCodeText = it },
+                        label = { Text("Recipient address") },
+                        trailingIcon = {
+                            when {
+                                permissionState.status.isGranted -> {
+                                    IconButton(onClick = {
+                                        val intent = Intent(context, QrScannerActivity::class.java)
+                                        scanLauncher.launch(intent)
+                                    }) {
+                                        Icon(
+                                            imageVector = ImageVector.vectorResource(id = R.drawable.qr_code_24px),
+                                            contentDescription = "Scan QR Code"
+                                        )
                                     }
-                                    context.startActivity(intent)
-                                }) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Settings,
-                                        contentDescription = "Open Settings"
-                                    )
+                                }
+
+                                permissionState.status.shouldShowRationale -> {
+                                    IconButton(onClick = { permissionState.launchPermissionRequest() }) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Warning,
+                                            contentDescription = "Grant Camera Permission"
+                                        )
+                                    }
+                                }
+
+                                else -> {
+                                    IconButton(onClick = {
+                                        val intent =
+                                            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                                data = Uri.fromParts(
+                                                    "package",
+                                                    context.packageName,
+                                                    null
+                                                )
+                                            }
+                                        context.startActivity(intent)
+                                    }) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Settings,
+                                            contentDescription = "Open Settings"
+                                        )
+                                    }
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = amountText,
+                        onValueChange = { amountText = it },
+                        label = { Text("Amount") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Quick Amount Buttons
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        quickAmounts.forEach { amount ->
+                            val isSelected = selectedAmount == amount
+                            val buttonModifier = Modifier
+                                .weight(1f)
+                                .height(48.dp)
+
+                            if (isSelected) {
+                                Button(
+                                    onClick = { amountText = amount },
+                                    modifier = buttonModifier,
+                                    contentPadding = PaddingValues(0.dp),
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        containerColor = MaterialTheme.colorScheme.inverseSurface)
+                                ) {
+                                    Text(amount, color=MaterialTheme.colorScheme.surface)
+                                }
+                            } else {
+                                OutlinedButton(
+                                    onClick = { amountText = amount },
+                                    modifier = buttonModifier,
+                                    contentPadding = PaddingValues(0.dp),
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        containerColor = MaterialTheme.colorScheme.surface)
+
+                                ) {
+                                    Text(amount, color=MaterialTheme.colorScheme.onSurface)
                                 }
                             }
                         }
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                    }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                // Amount Input
-                OutlinedTextField(
-                    value = amountText,
-                    onValueChange = { amountText = it },
-                    label = { Text("Amount") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Send Button
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
                     Button(
-                        onClick = { onSend(qrCodeText, amountText) }
+                        onClick = { onSend(qrCodeText, amountText) },
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.inverseSurface),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
                     ) {
-                        Text("Send")
+                        Text("Send", color=MaterialTheme.colorScheme.surface)
                     }
                 }
             }
         }
     }
 }
+
 
 
 
