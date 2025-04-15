@@ -27,6 +27,8 @@ class WalletViewModel : ViewModel() {
     private val _transactions = MutableStateFlow<List<Transaction>>(emptyList())
     val transactions: StateFlow<List<Transaction>> = _transactions
 
+    private val _accountAddress = MutableStateFlow("Address")
+    val accountAddress: StateFlow<String> = _accountAddress
 
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading
@@ -67,6 +69,17 @@ class WalletViewModel : ViewModel() {
 
                     client.newCall(request).execute()
                 }
+
+                val response3 = withContext(Dispatchers.IO) {
+                    val client = OkHttpClient()
+                    val request = Request.Builder()
+                        .url("https://wallet.goodnodedemo.ovh/wallet/XMR/address")
+                        .addHeader("Authorization", "orzechySaZdrowe")
+                        .build()
+
+                    client.newCall(request).execute()
+                }
+
                 if (!response.isSuccessful) {
                     _error.value = "Error: ${response.code}"
                     return@launch

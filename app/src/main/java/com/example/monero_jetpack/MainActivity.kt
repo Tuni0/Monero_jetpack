@@ -77,7 +77,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.vectorResource
@@ -93,11 +92,17 @@ import androidx.activity.ComponentActivity
 import androidx.compose.animation.core.EaseInOutCubic
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.collectAsState
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -122,12 +127,14 @@ import androidx.compose.material.icons.filled.NorthEast
 import androidx.compose.material.icons.filled.SouthWest
 import androidx.compose.material.icons.outlined.AccountBox
 import androidx.compose.material.icons.outlined.CopyAll
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextRange
@@ -174,7 +181,6 @@ fun MainScreen(viewModel:WalletViewModel = viewModel()) {
     val isLoading by viewModel.isLoading.collectAsState()
     val error by viewModel.error.collectAsState()
     val transactions by viewModel.transactions.collectAsState()
-
     val context = LocalContext.current
     var selectedItem by remember { mutableIntStateOf(0) }
     val items1 = listOf("Home", "Contacts", "Payments")
@@ -242,47 +248,35 @@ fun MainScreen(viewModel:WalletViewModel = viewModel()) {
                 )
             },
             bottomBar = {
-                Box(
+                NavigationBar (
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    contentColor = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier
-                        .padding(16.dp) // space around the nav bar
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp)) // rounded corners
-                        .border(0.5.dp, MaterialTheme.colorScheme.onSurface, RoundedCornerShape(12.dp)) // black border
-                        .background(MaterialTheme.colorScheme.surface) // white background
-                ) {
-                    NavigationBar(
-                        containerColor = Color.Transparent, // so background from Box shows through
-                        tonalElevation = 0.dp, // remove shadow
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .onGloballyPositioned { layoutCoordinates ->
-                                navigationBarHeight.value = with(density) { layoutCoordinates.size.height.toDp() }
-                            }
-                    ) {
+                    .onGloballyPositioned { layoutCoordinates ->
+                        navigationBarHeight.value = with(density) { layoutCoordinates.size.height.toDp() }
+                    }
+                ){
                         items1.forEachIndexed { index, item ->
                             NavigationBarItem(
                                 icon = {
                                     Icon(
                                         if (selectedItem == index) selectedIcons[index] else unselectedIcons[index],
-                                        contentDescription = item,
-                                        tint = Color.Black // consistent black icons
+                                        contentDescription = item
                                     )
                                 },
-                                label = {
-                                    Text(
-                                        text = item,
-                                        color = Color.Black
-                                    )
-                                },
+                                label = { Text(item) },
                                 selected = selectedItem == index,
                                 onClick = { selectedItem = index },
-                                alwaysShowLabel = true,
-                                modifier=Modifier.align(Alignment.CenterVertically)
-                            )
-                        }
-                    }
-                }
+                                colors = NavigationBarItemDefaults.colors(
+                                    indicatorColor = MaterialTheme.colorScheme.onSurface,
+                                    selectedIconColor = MaterialTheme.colorScheme.surface,
 
+                                )
+                            )
+
+                        }
+
+                }
             },
             content = { innerPadding ->
                 Box(modifier = Modifier.padding(innerPadding)) {
@@ -373,6 +367,7 @@ fun Dashboard(
     var text by remember { mutableStateOf("") }
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
+    val recentTransactions = transactions.takeLast(4).reversed()
 
     LazyColumn(
         modifier = Modifier
@@ -573,6 +568,72 @@ fun Dashboard(
                 MonochromeLineChart(viewModel = WalletViewModel())
             }
         }
+
+        item{
+            OutlinedCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.onSurface),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "Recent Transactions",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    getExampleTransactions().forEach { tx ->
+                        val isIncome = tx.type == "in"
+                        val icon = if (isIncome) Icons.Filled.SouthWest else Icons.Filled.NorthEast
+                        val bgColor = if (isIncome) Color(0xFFDFFFE3) else Color(0xFFFFE3E3)
+                        val iconColor = if (isIncome) Color(0xFF0BAF3C) else Color(0xFFE53935)
+                        val formattedAmount = (if (isIncome) "+" else "-") + "${tx.amount} XMR"
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(bgColor),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = icon,
+                                        contentDescription = null,
+                                        tint = iconColor,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text("Jane Doe", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                    Text("2 hours ago", fontSize = 12.sp, color = Color.Gray)
+                                }
+                            }
+                            Text(
+                                text = formattedAmount,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
 
 
 
