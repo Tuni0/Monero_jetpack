@@ -237,8 +237,7 @@ fun MainScreen(viewModel:WalletViewModel = viewModel()) {
                     },
                     actions = {
                         IconButton(onClick = {
-                            val intent = Intent(context, UserLoginActivity::class.java)
-                            context.startActivity(intent)
+
                         }) {
                             Icon(
                                 imageVector = Icons.Filled.Person,

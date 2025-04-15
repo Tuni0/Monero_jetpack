@@ -63,12 +63,6 @@ dependencies {
 
     // Compose UI
     implementation(libs.ui)
-    // Import the BoM for the Firebase platform
-    implementation(libs.firebase.bom)
-
-    // Add the dependency for the Firebase Authentication library
-    // When using the BoM, you don't specify versions in Firebase library dependencies
-    implementation(libs.google.firebase.auth)
 
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services.auth)
@@ -86,12 +80,12 @@ dependencies {
     implementation ("com.squareup.retrofit2:converter-gson:2.9.0")
     implementation ("com.squareup.okhttp3:logging-interceptor:4.9.1")
 
-    implementation (libs.androidx.lifecycle.viewmodel.ktx)
+    implementation ("androidx.lifecycle:lifecycle-viewmodel-ktx:2.6.0")
     implementation ("androidx.lifecycle:lifecycle-runtime-ktx:2.6.0")
-    implementation ("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+    implementation ("androidx.lifecycle:lifecycle-viewmodel-compose:2.6.0")
     implementation ("com.squareup.okhttp3:okhttp:4.10.0")
 
-    implementation ("com.google.code.gson:gson:2.10.1")
+    implementation ("com.google.code.gson:gson:2.8.8")
 
     implementation ("io.github.ehsannarmani:compose-charts:0.1.2")
     implementation (libs.androidx.material.icons.extended)
