@@ -140,6 +140,11 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import com.google.firebase.FirebaseApp
+import com.google.firebase.auth.FirebaseAuth
 import ir.ehsannarmani.compose_charts.models.DotProperties
 import ir.ehsannarmani.compose_charts.models.GridProperties
 import ir.ehsannarmani.compose_charts.models.HorizontalIndicatorProperties
@@ -151,20 +156,52 @@ import ir.ehsannarmani.compose_charts.models.VerticalIndicatorProperties
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        FirebaseApp.initializeApp(this)
 
         setContent {
             Monero_jetpackTheme {
-                // A surface container using the 'background' color from the theme
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    MainScreen()
+                val navController = rememberNavController()
+
+                // 👇 auto-login if already signed in
+                val auth = FirebaseAuth.getInstance()
+                var startDestination by remember { mutableStateOf<String?>(null) }
+
+                LaunchedEffect(Unit) {
+                    val user = auth.currentUser
+                    if (user != null) {
+                        try {
+                            user.getIdToken(true).addOnSuccessListener {
+                                // Token still valid → allow to stay signed in
+                                startDestination = "home"
+                            }.addOnFailureListener {
+                                // Token invalid → sign out
+                                auth.signOut()
+                                startDestination = "startup"
+                            }
+                        } catch (e: Exception) {
+                            auth.signOut()
+                            startDestination = "startup"
+                        }
+                    } else {
+                        startDestination = "startup"
+                    }
                 }
+
+
+                startDestination?.let { start ->
+                    NavHost(navController = navController, startDestination = start) {
+                        composable("startup") { StartupScreen(navController) }
+                        composable("login") { LoginScreen(navController) }
+                        composable("register") { RegisterScreen(navController) }
+                        composable("home") { MainScreen() }
+                    }
+                }
+
             }
         }
     }
 }
+
 
 
 data class NavigationItem(
@@ -218,8 +255,7 @@ fun MainScreen(viewModel:WalletViewModel = viewModel()) {
                     },
                     actions = {
                         IconButton(onClick = {
-                            val intent = Intent(context, UserLoginActivity::class.java)
-                            context.startActivity(intent)
+
                         }) {
                             Icon(
                                 imageVector = Icons.Filled.Person,

@@ -12,7 +12,20 @@
           "package_name": "com.example.monero_jetpack"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "399010568004-65ru71chmtjdnfpa0g9ccf33cbd2lnhe.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.monero_jetpack",
+            "certificate_hash": "9a1b246a472e4d7467d9b7986c19bdb0bd908e7d"
+          }
+        },
+        {
+          "client_id": "399010568004-a2tl0ct5kfgshg5u8529pqlbvc871265.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyA7qX1cL_rNr-WBPmP2ZRSKhn2G7CwsS_E"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "399010568004-a2tl0ct5kfgshg5u8529pqlbvc871265.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
