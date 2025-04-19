@@ -26,14 +26,24 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.google.firebase.auth.FirebaseAuth
-
+import com.google.firebase.firestore.FirebaseFirestore
+import java.security.MessageDigest
 
 @Composable
 fun RegisterScreen(navController: NavController) {
     val context = LocalContext.current
     val auth = FirebaseAuth.getInstance()
+    val firestore = remember { FirebaseFirestore.getInstance() }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
+    var username by remember { mutableStateOf("") }
+    var errorMessage by remember { mutableStateOf("") }
+
+    fun hashPassword(password: String): String {
+        val bytes = MessageDigest.getInstance("SHA-256").digest(password.toByteArray())
+        return bytes.joinToString("") { "%02x".format(it) }
+    }
 
     Column(
         modifier = Modifier
@@ -46,6 +56,13 @@ fun RegisterScreen(navController: NavController) {
         Spacer(modifier = Modifier.height(8.dp))
 
         OutlinedTextField(
+            value = username,
+            onValueChange = { username = it },
+            label = { Text("Username") },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        OutlinedTextField(
             value = email,
             onValueChange = { email = it },
             label = { Text("Email") },
@@ -56,18 +73,83 @@ fun RegisterScreen(navController: NavController) {
             value = password,
             onValueChange = { password = it },
             label = { Text("Password") },
+            isError = password.length < 6,
             modifier = Modifier.fillMaxWidth(),
             visualTransformation = PasswordVisualTransformation()
         )
 
+        if (password.length < 6) {
+            Text("Password must be at least 6 characters", color = MaterialTheme.colorScheme.error)
+        }
+
+        OutlinedTextField(
+            value = confirmPassword,
+            onValueChange = { confirmPassword = it },
+            label = { Text("Confirm Password") },
+            isError = confirmPassword != password,
+            modifier = Modifier.fillMaxWidth(),
+            visualTransformation = PasswordVisualTransformation()
+        )
+
+        if (confirmPassword != password) {
+            Text("Passwords do not match", color = MaterialTheme.colorScheme.error)
+        }
+
+        if (errorMessage.isNotEmpty()) {
+            Text(errorMessage, color = MaterialTheme.colorScheme.error)
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         Button(
             onClick = {
+                if (password.length < 6) {
+                    errorMessage = "Password too short"
+                    return@Button
+                }
+                if (password != confirmPassword) {
+                    errorMessage = "Passwords do not match"
+                    return@Button
+                }
+
+                val hashedPassword = hashPassword(password)
                 auth.createUserWithEmailAndPassword(email, password)
                     .addOnCompleteListener { task ->
                         if (task.isSuccessful) {
-                            navController.navigate("home")
+                            val user = auth.currentUser
+                            user?.let {
+                                firestore.collection("users")
+                                    .get()
+                                    .addOnSuccessListener { result ->
+                                        val nextId = result.size() + 1
+                                        val userData = hashMapOf(
+                                            "user_id" to nextId,
+                                            "username" to username,
+                                            "email" to email,
+                                            "password" to hashedPassword,
+                                            "address_token" to "",
+                                            "hasWallet" to false
+                                        )
+
+                                        firestore.collection("users").document(it.uid).set(userData)
+                                            .addOnSuccessListener {
+                                                Toast.makeText(
+                                                    context,
+                                                    "Registered & saved",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                                navController.navigate("add_wallet") {
+                                                    popUpTo("startup") { inclusive = true }
+                                                }
+
+                                            }
+                                            .addOnFailureListener { e ->
+                                                errorMessage = "Firestore error: ${e.message}"
+                                            }
+                                    }
+                            }
                         } else {
-                            Toast.makeText(context, "Registration failed", Toast.LENGTH_SHORT).show()
+                            errorMessage = "Registration failed: ${task.exception?.message}"
                         }
                     }
             },

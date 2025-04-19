@@ -160,6 +160,7 @@ import com.google.accompanist.swiperefresh.rememberSwipeRefreshState
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.SystemBarStyle
 import androidx.compose.ui.graphics.toArgb
+import com.google.firebase.firestore.FirebaseFirestore
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -186,10 +187,18 @@ class MainActivity : ComponentActivity() {
                     if (user != null) {
                         try {
                             user.getIdToken(true).addOnSuccessListener {
-                                // Token still valid → allow to stay signed in
-                                startDestination = "home"
+                                FirebaseFirestore.getInstance()
+                                    .collection("users")
+                                    .document(user.uid)
+                                    .get()
+                                    .addOnSuccessListener { document ->
+                                        val hasWallet = document.getBoolean("hasWallet") == true
+                                        startDestination = if (hasWallet) "home" else "add_wallet"
+                                    }
+                                    .addOnFailureListener {
+                                        startDestination = "startup"
+                                    }
                             }.addOnFailureListener {
-                                // Token invalid → sign out
                                 auth.signOut()
                                 startDestination = "startup"
                             }
@@ -209,6 +218,8 @@ class MainActivity : ComponentActivity() {
                         composable("login") { LoginScreen(navController) }
                         composable("register") { RegisterScreen(navController) }
                         composable("home") { MainScreen() }
+                        composable("add_wallet") { AddWalletScreen(navController) }
+
                     }
                 }
 
@@ -231,11 +242,11 @@ fun MainScreen(viewModel:WalletViewModel = viewModel()) {
     val accountName by viewModel.accountName.collectAsState()
     val accountBalance by viewModel.accountBalance.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val userName by viewModel.userName.collectAsState()
     val error by viewModel.error.collectAsState()
     val transactions by viewModel.transactions.collectAsState()
     val address by viewModel.accountAddress.collectAsState()
     val accountBalanceUsd by viewModel.accountBalanceUsd.collectAsState()
-    val context = LocalContext.current
     var selectedItem by remember { mutableIntStateOf(0) }
     val items1 = listOf("Home", "Contacts", "Payments")
     val selectedIcons = listOf(Icons.Filled.Home, Icons.Filled.Person, Icons.Filled.Info)
@@ -247,7 +258,10 @@ fun MainScreen(viewModel:WalletViewModel = viewModel()) {
     val navigationBarHeight = remember { mutableStateOf(0.dp) }
     val density = LocalDensity.current
     val cleanAddress = address.replace("\"", "")
-
+    val context = LocalContext.current
+    LaunchedEffect(Unit) {
+        viewModel.fetchWalletData(context)
+    }
 
     var flag by remember { mutableStateOf(false) }
 
@@ -340,12 +354,15 @@ fun MainScreen(viewModel:WalletViewModel = viewModel()) {
                         onToggleFlag = { flag = !flag },
                         accountName = accountName,
                         accountBalance = accountBalance,
+                        userName = userName,
                         isLoading = isLoading,
                         error = error,
                         transactions = transactions,
                         address = address,
                         accountBalanceUsd = accountBalanceUsd,
-                        onRefresh = { viewModel.fetchWalletData() } // 🚀 This will re-run all network calls
+                        onRefresh = { viewModel.fetchWalletData(context) },
+                        onShowQRCode = { showQRCode = true  },
+                        onShowPayment = {showPayment = true}// 🚀 This will re-run all network calls
                     )
 
 
@@ -418,13 +435,16 @@ fun Dashboard(
     flag: Boolean,
     onToggleFlag: () -> Unit,
     accountName: String,
+    userName:String,
     accountBalance: String,
     isLoading: Boolean,
     error: String?,
     transactions: List<Transaction>,
     address: String,
     accountBalanceUsd: String,
-    onRefresh: () -> Unit
+    onRefresh: () -> Unit,
+    onShowQRCode: () -> Unit,
+    onShowPayment: ()->Unit
 
 ) {
     var text by remember { mutableStateOf("") }
@@ -480,7 +500,7 @@ fun Dashboard(
                             horizontalAlignment = Alignment.Start
                         ) {
                             Text(
-                                text = "User's Wallet",
+                                text = userName,
                                 fontSize = 20.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -518,13 +538,13 @@ fun Dashboard(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "$accountBalance",
+                            text = accountBalance,
                             fontSize = 28.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.inverseOnSurface
                         )
                         Text(
-                            text = "$accountBalanceUsd",
+                            text = accountBalanceUsd,
                             fontSize = 16.sp,
                             color = MaterialTheme.colorScheme.inverseOnSurface
                         )
@@ -536,7 +556,7 @@ fun Dashboard(
                             horizontalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
                             Button(
-                                onClick = { /* Send */ },
+                                onClick = { onShowPayment() },
                                 modifier = Modifier.weight(1f),
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.buttonColors(
@@ -549,7 +569,7 @@ fun Dashboard(
                             }
 
                             Button(
-                                onClick = { /* Receive */ },
+                                onClick = { onShowQRCode() },
                                 modifier = Modifier.weight(1f),
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.buttonColors(

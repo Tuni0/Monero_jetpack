@@ -14,11 +14,11 @@
       },
       "oauth_client": [
         {
-          "client_id": "399010568004-65ru71chmtjdnfpa0g9ccf33cbd2lnhe.apps.googleusercontent.com",
+          "client_id": "399010568004-6alirfuqccsqegi9a72a71hj8o4n9pit.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.example.monero_jetpack",
-            "certificate_hash": "9a1b246a472e4d7467d9b7986c19bdb0bd908e7d"
+            "certificate_hash": "8d17b07db8fa8f47acdae41656a7ea07737b58c3"
           }
         },
         {
