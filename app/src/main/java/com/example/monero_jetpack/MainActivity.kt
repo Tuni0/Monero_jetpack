@@ -159,6 +159,12 @@ import com.google.accompanist.swiperefresh.SwipeRefresh
 import com.google.accompanist.swiperefresh.rememberSwipeRefreshState
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.SystemBarStyle
+import androidx.compose.material.icons.filled.ReceiptLong
+import androidx.compose.material.icons.filled.ShowChart
+import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.outlined.ReceiptLong
+import androidx.compose.material.icons.outlined.ShowChart
+import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.ui.graphics.toArgb
 import com.google.firebase.firestore.FirebaseFirestore
 
@@ -248,10 +254,20 @@ fun MainScreen(viewModel:WalletViewModel = viewModel()) {
     val address by viewModel.accountAddress.collectAsState()
     val accountBalanceUsd by viewModel.accountBalanceUsd.collectAsState()
     var selectedItem by remember { mutableIntStateOf(0) }
-    val items1 = listOf("Home", "Contacts", "Payments")
-    val selectedIcons = listOf(Icons.Filled.Home, Icons.Filled.Person, Icons.Filled.Info)
+    val items1 = listOf("Account", "Transactions", "Swap", "Market")
+    val selectedIcons = listOf(
+        Icons.Filled.Person,
+        Icons.Filled.ReceiptLong,
+        Icons.Filled.SwapHoriz,
+        Icons.Filled.ShowChart
+    )
     val unselectedIcons =
-        listOf(Icons.Outlined.Home, Icons.Outlined.Person, Icons.Outlined.Info)
+        listOf(
+            Icons.Outlined.Person,
+            Icons.Outlined.ReceiptLong,
+            Icons.Outlined.SwapHoriz,
+            Icons.Outlined.ShowChart
+        )
     var showQRCode by remember { mutableStateOf(false) } // <-- Lifted State
     var showPayment by remember { mutableStateOf(false) } // <-- Lifted State
 
@@ -275,16 +291,17 @@ fun MainScreen(viewModel:WalletViewModel = viewModel()) {
                 TopAppBar(
 
                     title = {
-                        Row(verticalAlignment = Alignment.CenterVertically){
-                        Image(
-                            painter = painterResource(id = R.drawable.logo_1),
-                            contentDescription = "Monero Logo",
-                            contentScale = ContentScale.Fit,
-                            modifier = Modifier
-                                .size(20.dp)
-                                .clip(CircleShape) // Optional for circular background
-                        )
-                        Text(text = "Monero Wallet", fontSize = 25.sp)}
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Image(
+                                painter = painterResource(id = R.drawable.logo_1),
+                                contentDescription = "Monero Logo",
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .clip(CircleShape) // Optional for circular background
+                            )
+                            Text(text = "Monero Wallet", fontSize = 25.sp)
+                        }
                     },
                     actions = {
                         IconButton(onClick = {
@@ -314,118 +331,230 @@ fun MainScreen(viewModel:WalletViewModel = viewModel()) {
                         actionIconContentColor = MaterialTheme.colorScheme.onSurface,
                     ),
 
-                )
+                    )
             },
             bottomBar = {
-                NavigationBar (
+                NavigationBar(
                     containerColor = MaterialTheme.colorScheme.surfaceContainer,
                     contentColor = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier
-                    .onGloballyPositioned { layoutCoordinates ->
-                        navigationBarHeight.value = with(density) { layoutCoordinates.size.height.toDp() }
-                    }
-                ){
-                        items1.forEachIndexed { index, item ->
-                            NavigationBarItem(
-                                icon = {
-                                    Icon(
-                                        if (selectedItem == index) selectedIcons[index] else unselectedIcons[index],
-                                        contentDescription = item
-                                    )
-                                },
-                                label = { Text(item) },
-                                selected = selectedItem == index,
-                                onClick = { selectedItem = index },
-                                colors = NavigationBarItemDefaults.colors(
-                                    indicatorColor = MaterialTheme.colorScheme.onSurface,
-                                    selectedIconColor = MaterialTheme.colorScheme.surface,
+                        .onGloballyPositioned { layoutCoordinates ->
+                            navigationBarHeight.value =
+                                with(density) { layoutCoordinates.size.height.toDp() }
+                        }
+                ) {
+                    items1.forEachIndexed { index, item ->
+                        NavigationBarItem(
+                            icon = {
+                                Icon(
+                                    if (selectedItem == index) selectedIcons[index] else unselectedIcons[index],
+                                    contentDescription = item
+                                )
+                            },
+                            label = { Text(item) },
+                            selected = selectedItem == index,
+                            onClick = { selectedItem = index },
+                            colors = NavigationBarItemDefaults.colors(
+                                indicatorColor = MaterialTheme.colorScheme.onSurface,
+                                selectedIconColor = MaterialTheme.colorScheme.surface,
 
                                 )
-                            )
+                        )
 
-                        }
+                    }
 
                 }
             },
             content = { innerPadding ->
-                Box(modifier = Modifier.padding(innerPadding)) {
-                    Dashboard(paddingValues = innerPadding,
-                        flag = flag,
-                        onToggleFlag = { flag = !flag },
-                        accountName = accountName,
-                        accountBalance = accountBalance,
-                        userName = userName,
-                        isLoading = isLoading,
-                        error = error,
-                        transactions = transactions,
-                        address = address,
-                        accountBalanceUsd = accountBalanceUsd,
-                        onRefresh = { viewModel.fetchWalletData(context) },
-                        onShowQRCode = { showQRCode = true  },
-                        onShowPayment = {showPayment = true}// 🚀 This will re-run all network calls
-                    )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                ) {
 
+                    // Switch screens based on selected tab
+                    when (selectedItem) {
+                        0 -> Dashboard(
+                            paddingValues = innerPadding,
+                            flag = flag,
+                            onToggleFlag = { flag = !flag },
+                            accountName = accountName,
+                            accountBalance = accountBalance,
+                            userName = userName,
+                            isLoading = isLoading,
+                            error = error,
+                            transactions = transactions,
+                            address = address,
+                            accountBalanceUsd = accountBalanceUsd,
+                            onRefresh = { viewModel.fetchWalletData(context) },
+                            onShowQRCode = { showQRCode = true },
+                            onShowPayment = { showPayment = true }
+                        )
 
+                        1 -> TransactionsScreen(transactions)
+                        2 -> SwapScreen()
+                        3 -> MarketScreen()
+                    }
                 }
             }
-        )
-
-        // Floating Action Button (FAB) - Placed Last to Ensure Visibility
-        FloatingActionButton(
-            onClick = { flag = !flag },
-            containerColor = MaterialTheme.colorScheme.inversePrimary,
-            contentColor = MaterialTheme.colorScheme.primary,
-            elevation = FloatingActionButtonDefaults.bottomAppBarFabElevation(),
-            modifier = Modifier
-                .align(Alignment.BottomEnd) // FAB Position
-                .padding(end=20.dp, bottom = navigationBarHeight.value +20.dp)
-                .zIndex(2f) // Ensure it's above everything, including the dim overlay
-        ) {
-            Icon(
-                imageVector = if (flag) Icons.Filled.Clear else Icons.Filled.Add,
-                contentDescription = "Menu Toggle"
             )
-        }
+                // Floating Action Button (FAB) - Placed Last to Ensure Visibility
+                FloatingActionButton(
+                    onClick = { flag = !flag },
+                    containerColor = MaterialTheme.colorScheme.inversePrimary,
+                    contentColor = MaterialTheme.colorScheme.primary,
+                    elevation = FloatingActionButtonDefaults.bottomAppBarFabElevation(),
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd) // FAB Position
+                        .padding(end=20.dp, bottom = navigationBarHeight.value +20.dp)
+                        .zIndex(2f) // Ensure it's above everything, including the dim overlay
+                ) {
+                    Icon(
+                        imageVector = if (flag) Icons.Filled.Clear else Icons.Filled.Add,
+                        contentDescription = "Menu Toggle"
+                    )
+                }
 
-        // Dimming overlay (covers EVERYTHING, including the AppBar and BottomBar)
-        if(flag ||showQRCode||showPayment){
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.5f)) // Dim effect
-                    .clickable { flag = false } // Click outside to dismiss
-                    .zIndex(1f) // Below FAB, above Scaffold
-            )
-        }
-        if (flag ) {
+                // Dimming overlay (covers EVERYTHING, including the AppBar and BottomBar)
+                if(flag ||showQRCode||showPayment){
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.5f)) // Dim effect
+                            .clickable { flag = false } // Click outside to dismiss
+                            .zIndex(1f) // Below FAB, above Scaffold
+                    )
+                }
+                if (flag ) {
 
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(bottom = 30.dp, end = 28.dp)
-                    .zIndex(2f) // Above the dim effect
-            ) {
-                FloatingMenu(onDismiss = {flag = false},
-                    onShowQRCode = { showQRCode = true  },
-                    onShowPayment = {showPayment = true},
-                    navBarHeight = navigationBarHeight.value // Pass the height here
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(bottom = 30.dp, end = 28.dp)
+                            .zIndex(2f) // Above the dim effect
+                    ) {
+                        FloatingMenu(onDismiss = {flag = false},
+                            onShowQRCode = { showQRCode = true  },
+                            onShowPayment = {showPayment = true},
+                            navBarHeight = navigationBarHeight.value // Pass the height here
+                        )
+                    }
+
+                }
+
+
+
+
+            }
+            // Show QR Code Fullscreen When Activated
+            if (showQRCode) {
+                QRCodeScreen(address, balance = accountBalance , balanceUsd = accountBalanceUsd,onDismiss = { showQRCode = false }, cleanAddress = cleanAddress )
+            }
+            if(showPayment){
+                TransactionCard(onDismiss = { showPayment = false }, onSend = { qrCode, amount -> showPayment = false })
+            }
+    }
+
+
+@Composable
+fun MarketScreen() {
+    TODO("Not yet implemented")
+}
+
+@Composable
+fun SwapScreen() {
+    TODO("Not yet implemented")
+}
+
+@Composable
+fun TransactionsScreen(transactions: List<Transaction>) {
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+
+        item {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "All Transactions",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                if (transactions.isEmpty()) {
+
+                    Text(
+                        text = "No transactions to display.",
+                        color = MaterialTheme.colorScheme.error,
+                        fontSize = 16.sp,
+                        modifier = Modifier.padding(top = 20.dp)
+                    )
+
+                } else {
+                    transactions.forEach { tx ->
+                        val isIncome = tx.type == "in"
+                        val icon =
+                            if (isIncome) Icons.Filled.SouthWest else Icons.Filled.NorthEast
+                        val bgColor = if (isIncome) Color(0xFFDFFFE3) else Color(0xFFFFE3E3)
+                        val iconColor = if (isIncome) Color(0xFF0BAF3C) else Color(0xFFE53935)
+                        val formattedAmount = (if (isIncome) "+" else "-") + "${tx.amount} XMR"
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(bgColor),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = icon,
+                                        contentDescription = null,
+                                        tint = iconColor,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text(
+                                        tx.type,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp
+                                    )
+                                    Text(
+                                        "Fee: ${tx.fee} XMR",
+                                        fontSize = 12.sp,
+                                        color = Color.Gray
+                                    )
+                                }
+                            }
+                            Text(
+                                text = formattedAmount,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                }
             }
 
         }
-
-
-
-
-    }
-    // Show QR Code Fullscreen When Activated
-    if (showQRCode) {
-        QRCodeScreen(address, balance = accountBalance , balanceUsd = accountBalanceUsd,onDismiss = { showQRCode = false }, cleanAddress = cleanAddress )
-    }
-    if(showPayment){
-        TransactionCard(onDismiss = { showPayment = false }, onSend = { qrCode, amount -> showPayment = false })
     }
 }
+
+
 
 
 
