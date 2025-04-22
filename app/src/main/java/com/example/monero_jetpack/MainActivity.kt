@@ -87,6 +87,7 @@ import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.google.accompanist.permissions.shouldShowRationale
 import android.provider.Settings  // For Settings.ACTION_APPLICATION_DETAILS_SETTINGS
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -159,6 +160,8 @@ import com.google.accompanist.swiperefresh.SwipeRefresh
 import com.google.accompanist.swiperefresh.rememberSwipeRefreshState
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.SystemBarStyle
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material.icons.filled.SwapHoriz
@@ -166,6 +169,7 @@ import androidx.compose.material.icons.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.ShowChart
 import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.ui.graphics.toArgb
+import androidx.navigation.NavController
 import com.google.firebase.firestore.FirebaseFirestore
 
 class MainActivity : ComponentActivity() {
@@ -183,6 +187,7 @@ class MainActivity : ComponentActivity() {
             )
             Monero_jetpackTheme {
                 val navController = rememberNavController()
+                val walletViewModel: WalletViewModel = viewModel() // ✅ shared ViewModel
 
                 // 👇 auto-login if already signed in
                 val auth = FirebaseAuth.getInstance()
@@ -223,8 +228,15 @@ class MainActivity : ComponentActivity() {
                         composable("startup") { StartupScreen(navController) }
                         composable("login") { LoginScreen(navController) }
                         composable("register") { RegisterScreen(navController) }
-                        composable("home") { MainScreen() }
-                        composable("add_wallet") { AddWalletScreen(navController) }
+                        composable("home") {
+                            MainScreen(navController = navController, viewModel = walletViewModel)
+                        }
+                        composable("add_wallet") {
+                            AddWalletScreen(navController = navController, viewModel = walletViewModel)
+                        }
+
+                        composable("swap") { SwapScreen(navController = navController, viewModel = walletViewModel) } // ✅ pass ViewModel here
+
 
                     }
                 }
@@ -244,14 +256,15 @@ data class NavigationItem(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen(viewModel:WalletViewModel = viewModel()) {
-    val accountName by viewModel.accountName.collectAsState()
+fun MainScreen(navController: NavController, viewModel:WalletViewModel ) {
     val accountBalance by viewModel.accountBalance.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val userName by viewModel.userName.collectAsState()
     val error by viewModel.error.collectAsState()
+    val selectedWalletId by viewModel.selectedWalletId.collectAsState()
+    val walletName by viewModel.walletDisplayName.collectAsState()
     val transactions by viewModel.transactions.collectAsState()
-    val address by viewModel.accountAddress.collectAsState()
+    val address = viewModel.accountAddress.collectAsState().value.replace("\"", "")
     val accountBalanceUsd by viewModel.accountBalanceUsd.collectAsState()
     var selectedItem by remember { mutableIntStateOf(0) }
     val items1 = listOf("Account", "Transactions", "Swap", "Market")
@@ -273,13 +286,14 @@ fun MainScreen(viewModel:WalletViewModel = viewModel()) {
 
     val navigationBarHeight = remember { mutableStateOf(0.dp) }
     val density = LocalDensity.current
-    val cleanAddress = address.replace("\"", "")
     val context = LocalContext.current
     LaunchedEffect(Unit) {
-        viewModel.fetchWalletData(context)
+        if (viewModel.selectedWalletId.value == null) {
+            viewModel.loadSelectedWallet(context)
+        }
     }
-
     var flag by remember { mutableStateOf(false) }
+
 
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -378,7 +392,6 @@ fun MainScreen(viewModel:WalletViewModel = viewModel()) {
                             paddingValues = innerPadding,
                             flag = flag,
                             onToggleFlag = { flag = !flag },
-                            accountName = accountName,
                             accountBalance = accountBalance,
                             userName = userName,
                             isLoading = isLoading,
@@ -388,11 +401,12 @@ fun MainScreen(viewModel:WalletViewModel = viewModel()) {
                             accountBalanceUsd = accountBalanceUsd,
                             onRefresh = { viewModel.fetchWalletData(context) },
                             onShowQRCode = { showQRCode = true },
-                            onShowPayment = { showPayment = true }
+                            onShowPayment = { showPayment = true },
+                            walletName = walletName
                         )
 
                         1 -> TransactionsScreen(transactions)
-                        2 -> SwapScreen()
+                        2 -> SwapScreen(navController = navController,viewModel=viewModel) // ✅ THIS is correct
                         3 -> MarketScreen()
                     }
                 }
@@ -448,7 +462,7 @@ fun MainScreen(viewModel:WalletViewModel = viewModel()) {
             }
             // Show QR Code Fullscreen When Activated
             if (showQRCode) {
-                QRCodeScreen(address, balance = accountBalance , balanceUsd = accountBalanceUsd,onDismiss = { showQRCode = false }, cleanAddress = cleanAddress )
+                QRCodeScreen(address, balance = accountBalance , balanceUsd = accountBalanceUsd,onDismiss = { showQRCode = false }, address= address )
             }
             if(showPayment){
                 TransactionCard(onDismiss = { showPayment = false }, onSend = { qrCode, amount -> showPayment = false })
@@ -462,9 +476,86 @@ fun MarketScreen() {
 }
 
 @Composable
-fun SwapScreen() {
-    TODO("Not yet implemented")
+fun SwapScreen(
+    navController: NavController,
+    viewModel: WalletViewModel
+
+) {
+    val context = LocalContext.current
+    val walletList by viewModel.walletList.collectAsState()
+    val selectedWalletId by viewModel.selectedWalletId.collectAsState()
+
+    LaunchedEffect(Unit) {
+        viewModel.loadWalletIds(context)   // 👈 Load all wallet IDs
+        viewModel.loadSelectedWallet(context) // 👈 Load the currently selected wallet
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        LazyColumn(
+            modifier = Modifier
+                .padding(16.dp)
+                .weight(1f)
+                .fillMaxWidth()
+        ) {
+            item {
+
+                walletList.forEach { walletId ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp)
+                            .clickable {
+                                viewModel.setSelectedWallet(walletId, context)
+                                navController.navigate("home") {
+                                    popUpTo("swap") { inclusive = true }
+                                }
+
+                            },
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (walletId == selectedWalletId) Color.Gray else MaterialTheme.colorScheme.surface
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(text = walletId, fontWeight = FontWeight.Medium)
+                            if (walletId == selectedWalletId) {
+                                Icon(Icons.Default.Check, contentDescription = "Selected")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // 👇 Add New Wallet Button
+        Button(
+            onClick = {
+                navController.navigate("add_wallet")
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 16.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary
+            )
+        ) {
+            Icon(Icons.Default.Add, contentDescription = "Add Wallet")
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Add New Wallet")
+        }
+    }
+
 }
+
+
 
 @Composable
 fun TransactionsScreen(transactions: List<Transaction>) {
@@ -563,7 +654,6 @@ fun Dashboard(
     paddingValues: PaddingValues,
     flag: Boolean,
     onToggleFlag: () -> Unit,
-    accountName: String,
     userName:String,
     accountBalance: String,
     isLoading: Boolean,
@@ -573,14 +663,13 @@ fun Dashboard(
     accountBalanceUsd: String,
     onRefresh: () -> Unit,
     onShowQRCode: () -> Unit,
-    onShowPayment: ()->Unit
+    onShowPayment: ()->Unit,
+    walletName:String
 
 ) {
-    var text by remember { mutableStateOf("") }
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
     val recentTransactions = transactions.takeLast(4).reversed()
-    val cleanAddress = address.replace("\"", "")
     val refreshState = rememberSwipeRefreshState(isRefreshing = isLoading)
 
     SwipeRefresh(state = refreshState, onRefresh = onRefresh) {
@@ -636,7 +725,7 @@ fun Dashboard(
                             )
                             Spacer(modifier = Modifier.size(8.dp))
                             Text(
-                                text = accountName,
+                                text = walletName,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -736,22 +825,14 @@ fun Dashboard(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         TextField(
-                            value = cleanAddress,
-                            onValueChange = { text = it },
+                            value = address,
+                            onValueChange = {},
                             readOnly = true,
                             label = { Text("Address") },
                             trailingIcon = {
                                 IconButton(onClick = {
-                                    clipboardManager.setText(
-                                        androidx.compose.ui.text.AnnotatedString(
-                                            text
-                                        )
-                                    )
-                                    Toast.makeText(
-                                        context,
-                                        "Copied to clipboard",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
+                                    clipboardManager.setText(AnnotatedString(address))
+                                    Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
                                 }) {
                                     Icon(Icons.Outlined.CopyAll, contentDescription = "Copy")
                                 }
@@ -1115,7 +1196,7 @@ fun QRCodeScreen(
     balance: String,
     balanceUsd: String,
     onDismiss: () -> Unit,
-    cleanAddress: String
+    address: String
 ) {
     val qrBitmap = remember(inputText) { generateQRCode(inputText) }
     val clipboardManager = LocalClipboardManager.current
@@ -1127,7 +1208,7 @@ fun QRCodeScreen(
     }
     LaunchedEffect(Unit) {
         isVisible = true
-        text = cleanAddress // Set the text on entry
+        text = address // Set the text on entry
     }
 
     AnimatedVisibility(
@@ -1212,13 +1293,13 @@ fun QRCodeScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     TextField(
-                        value = cleanAddress,
+                        value = address,
                         onValueChange = { text = it },
                         readOnly = true,
                         label = { Text("Address") },
                         trailingIcon = {
                             IconButton(onClick = {
-                                clipboardManager.setText(AnnotatedString(cleanAddress))
+                                clipboardManager.setText(AnnotatedString(address))
                                 Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
                             }) {
                                 Icon(Icons.Outlined.CopyAll, contentDescription = "Copy")
@@ -1505,4 +1586,4 @@ fun TransactionCard(
 @Preview(showBackground = true)
 @Composable
 fun MainScreenPreview() {
-    MainScreen() }
+   }

@@ -1,22 +1,13 @@
 package com.example.monero_jetpack
 
+import android.content.Context
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Text
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,24 +22,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.edit
 import androidx.navigation.NavController
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.*
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
 import org.json.JSONObject
 
-
 @Composable
-fun AddWalletScreen(navController: NavController) {
+fun AddWalletScreen(navController: NavController, viewModel: WalletViewModel) {
     val context = LocalContext.current
     val auth = FirebaseAuth.getInstance()
     val user = auth.currentUser
@@ -56,6 +42,7 @@ fun AddWalletScreen(navController: NavController) {
 
     val showMnemonicDialog = remember { mutableStateOf(false) }
     val mnemonicValue = remember { mutableStateOf("") }
+    val walletName = remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier
@@ -85,9 +72,24 @@ fun AddWalletScreen(navController: NavController) {
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(horizontal = 16.dp)
         )
-        Spacer(modifier = Modifier.height(48.dp))
+        Spacer(modifier = Modifier.height(24.dp))
+
+        OutlinedTextField(
+            value = walletName.value,
+            onValueChange = { walletName.value = it },
+            label = { Text("Wallet Name") },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(32.dp))
+
         Button(
             onClick = {
+                if (walletName.value.isBlank()) {
+                    Toast.makeText(context, "Please enter a wallet name", Toast.LENGTH_SHORT).show()
+                    return@Button
+                }
+
                 user?.let {
                     val client = OkHttpClient()
                     val request = Request.Builder()
@@ -98,45 +100,64 @@ fun AddWalletScreen(navController: NavController) {
                     CoroutineScope(Dispatchers.IO).launch {
                         try {
                             val response = client.newCall(request).execute()
-                            if (response.isSuccessful) {
-                                val walletJson = response.body?.string() ?: ""
-
-                                val jsonObject = JSONObject(walletJson)
-                                val mnemonic = jsonObject.optString("mnemonic", "")
-                                mnemonicValue.value = mnemonic
-
-                                val masterKey = MasterKey.Builder(context)
-                                    .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-                                    .build()
-
-                                val securePrefs = EncryptedSharedPreferences.create(
-                                    context,
-                                    "secure_wallet_prefs",
-                                    masterKey,
-                                    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                                    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-                                )
-
-                                with(securePrefs.edit()) {
-                                    putString("wallet_data", walletJson)
-                                    apply()
+                            if (!response.isSuccessful) {
+                                withContext(Dispatchers.Main) {
+                                    Toast.makeText(context, "Wallet creation failed: ${response.code}", Toast.LENGTH_LONG).show()
                                 }
+                                Log.e("AddWalletScreen", "Wallet creation failed. Code: ${response.code}")
+                                Log.e("AddWalletScreen", "Response: ${response.body?.string()}")
+                                return@launch
+                            }
 
+                            val walletJson = response.body?.string() ?: ""
+                            val jsonObject = JSONObject(walletJson)
+                            val mnemonic = jsonObject.optString("mnemonic", "")
+                            val entropy = jsonObject.optString("entropy", "")
+
+                            if (mnemonic.isBlank() || entropy.isBlank()) {
+                                withContext(Dispatchers.Main) {
+                                    Toast.makeText(context, "Invalid wallet data from server", Toast.LENGTH_LONG).show()
+                                }
+                                Log.e("AddWalletScreen", "Empty mnemonic or entropy from API.")
+                                return@launch
+                            }
+
+                            val walletObject = JSONObject().apply {
+                                put("mnemonic", mnemonic)
+                                put("entropy", entropy)
+                                put("name", walletName.value)
+                            }
+
+                            val prefs = context.getSharedPreferences("wallet_prefs", Context.MODE_PRIVATE)
+                            val existingData = prefs.getString("wallet_data", "{}") ?: "{}"
+                            val dataJson = JSONObject(existingData)
+
+                            dataJson.put(walletName.value, walletObject)
+                            dataJson.put("current_wallet", walletName.value)
+
+                            prefs.edit {
+                                putString("wallet_data", dataJson.toString())
+                            }
+
+                            try {
                                 firestore.collection("users").document(it.uid)
                                     .update("hasWallet", true)
-
-                                withContext(Dispatchers.Main) {
-                                    showMnemonicDialog.value = true
-                                }
-                            } else {
-                                withContext(Dispatchers.Main) {
-                                    Toast.makeText(context, "Wallet creation failed", Toast.LENGTH_SHORT).show()
-                                }
+                            } catch (e: Exception) {
+                                Log.e("AddWalletScreen", "Firestore update failed: ${e.message}")
                             }
-                        } catch (e: Exception) {
-                            e.printStackTrace()
+
                             withContext(Dispatchers.Main) {
-                                Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                                // Ustawiamy nowy portfel jako aktywny w ViewModelu
+                                viewModel.setSelectedWallet(walletName.value, context)
+                                viewModel.loadWalletIds(context) // odśwież listę portfeli
+                                mnemonicValue.value = mnemonic
+                                showMnemonicDialog.value = true
+                            }
+
+                        } catch (e: Exception) {
+                            Log.e("AddWalletScreen", "Network error: ${e.message}")
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(context, "Network error: ${e.message}", Toast.LENGTH_LONG).show()
                             }
                         }
                     }

@@ -52,180 +52,187 @@ import com.google.android.gms.auth.api.identity.Identity
 import com.google.android.gms.auth.api.identity.SignInClient
 import kotlinx.coroutines.tasks.await
 import android.provider.Settings
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Surface
+import androidx.credentials.GetCredentialResponse
+import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
 import com.google.firebase.firestore.FirebaseFirestore
 
 @Composable
 fun StartupScreen(navController: NavController) {
     val context = LocalContext.current
-    val oneTapClient = remember { Identity.getSignInClient(context) }
     val auth = FirebaseAuth.getInstance()
     val coroutineScope = rememberCoroutineScope()
     val firestore = remember { FirebaseFirestore.getInstance() }
+    val credentialManager = CredentialManager.create(context)
 
     val clientId =
         "399010568004-a2tl0ct5kfgshg5u8529pqlbvc871265.apps.googleusercontent.com" // Replace with actual Web client ID
 
-    val launcher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartIntentSenderForResult()
-    ) { result ->
-        if (result.resultCode == android.app.Activity.RESULT_OK) {
-            try {
-                val credential = oneTapClient.getSignInCredentialFromIntent(result.data)
-                val idToken = credential.googleIdToken
-                if (idToken != null) {
-                    val firebaseCredential = GoogleAuthProvider.getCredential(idToken, null)
-                    auth.signInWithCredential(firebaseCredential)
-                        .addOnCompleteListener { task ->
-                            if (task.isSuccessful) {
-                                val user = auth.currentUser
-                                user?.let {
-                                    firestore.collection("users")
-                                        .get()
-                                        .addOnSuccessListener { result ->
-                                            val nextId = result.size() + 1
-                                            val userData = hashMapOf(
-                                                "user_id" to nextId,
-                                                "username" to (user.displayName ?: ""),
-                                                "email" to (user.email ?: ""),
-                                                "address_token" to "default",
-                                                "password" to "google_oauth",
-                                                "hasWallet" to false
-                                            )
-                                            firestore.collection("users").document(user.uid)
-                                                .set(userData)
-                                                .addOnSuccessListener {
-                                                    navController.navigate("home") {
-                                                        popUpTo("startup") { inclusive = true }
-                                                    }
-                                                }
-
-
-                                        }
-                                }
-                                navController.navigate("home") {
-                                    popUpTo("startup") { inclusive = true }
-                                }
-                            } else {
-                                Toast.makeText(context, "Firebase sign-in failed", Toast.LENGTH_SHORT).show()
-                            }
-                        }
-                } else {
-                    Toast.makeText(context, "No ID token found", Toast.LENGTH_SHORT).show()
-                }
-            } catch (e: ApiException) {
-                Log.e("GoogleLogin", "Google sign-in failed", e)
-                Toast.makeText(context, "Google sign-in error: ${e.message}", Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
-    val addAccountLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.surface // 👈 Set the surface color here
     ) {
-        Toast.makeText(context, "Wróć i spróbuj ponownie się zalogować", Toast.LENGTH_LONG).show()
-    }
-
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Button(
-            onClick = {
-                coroutineScope.launch {
-                    val signInRequest = BeginSignInRequest.Builder()
-                        .setGoogleIdTokenRequestOptions(
-                            BeginSignInRequest.GoogleIdTokenRequestOptions.builder()
-                                .setSupported(true)
-                                .setServerClientId(clientId)
-                                .setFilterByAuthorizedAccounts(true)
-                                .build()
-                        )
-                        .setAutoSelectEnabled(true)
-                        .build()
-
-                    try {
-                        val result = oneTapClient.beginSignIn(signInRequest).await()
-                        launcher.launch(
-                            IntentSenderRequest.Builder(result.pendingIntent.intentSender).build()
-                        )
-                    } catch (e: Exception) {
-                        // Fallback to sign-up if no accounts
-                        val signUpRequest = BeginSignInRequest.Builder()
-                            .setGoogleIdTokenRequestOptions(
-                                BeginSignInRequest.GoogleIdTokenRequestOptions.builder()
-                                    .setSupported(true)
-                                    .setServerClientId(clientId)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(32.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Button(
+                onClick = {
+                    coroutineScope.launch {
+                        val signInRequest = GetCredentialRequest.Builder()
+                            .addCredentialOption(
+                                GetGoogleIdOption.Builder()
                                     .setFilterByAuthorizedAccounts(false)
+                                    .setServerClientId(clientId)
+                                    .setAutoSelectEnabled(true)
+                                    .setNonce("nonce")
                                     .build()
-                            )
-                            .build()
+                            ).build()
 
                         try {
-                            val signUpResult = oneTapClient.beginSignIn(signUpRequest).await()
-                            launcher.launch(
-                                IntentSenderRequest.Builder(signUpResult.pendingIntent.intentSender)
-                                    .build()
+                            val result = credentialManager.getCredential(
+                                request = signInRequest,
+                                context = context
                             )
-                        } catch (e: Exception) {
-                            Log.e("GoogleLogin", "Sign-up error: ${e.message}")
-                            val intent = Intent(Settings.ACTION_ADD_ACCOUNT).apply {
-                                putExtra("account_types", arrayOf("com.google"))
+                            handleSignIn(result, context, navController, firestore, auth)
+                        } catch (e: GetCredentialException) {
+                            try {
+                                val fallbackRequest = GetCredentialRequest.Builder()
+                                    .addCredentialOption(
+                                        GetGoogleIdOption.Builder()
+                                            .setFilterByAuthorizedAccounts(false)
+                                            .setServerClientId(clientId)
+                                            .setNonce("nonce")
+                                            .build()
+                                    ).build()
+
+                                val fallbackResult = credentialManager.getCredential(
+                                    request = fallbackRequest,
+                                    context = context
+                                )
+                                handleSignIn(
+                                    fallbackResult,
+                                    context,
+                                    navController,
+                                    firestore,
+                                    auth
+                                )
+                            } catch (ex: Exception) {
+                                Log.e("GoogleLogin", "Sign-in failed: ${ex.message}")
                             }
-                            addAccountLauncher.launch(intent)
                         }
                     }
-                }
-            }, modifier = Modifier.fillMaxWidth(),
-            shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.inverseSurface,
-                contentColor = MaterialTheme.colorScheme.surface
-            )
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.inverseSurface,
+                    contentColor = MaterialTheme.colorScheme.surface
+                )
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.icons8_google),
+                    contentDescription = "Google Icon",
+                    modifier = Modifier
+                        .height(20.dp)
+                        .aspectRatio(1f)
+                        .align(Alignment.CenterVertically),
+                )
+                Text(text = "Continue with Google", modifier = Modifier.padding(6.dp))
+            }
 
-        ) {
-            Image(
-                painter = painterResource(id = R.drawable.icons8_google),
-                contentDescription = "Google Icon",
-                modifier = Modifier
-                    .height(20.dp) // 🟢 Similar to text height, tweak if needed
-                    .aspectRatio(1f) // Keeps it square
-                    .align(Alignment.CenterVertically),
-            )
-            Text(text = "Continue with Google", modifier = Modifier.padding(6.dp))
-        }
+            OrDivider()
 
-        OrDivider()
+            Button(
+                onClick = { navController.navigate("login") },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.inverseSurface,
+                    contentColor = MaterialTheme.colorScheme.surface
+                )
+            ) {
+                Text("Log in with Email")
+            }
 
-        Button(
-            onClick = { navController.navigate("login") }, modifier = Modifier.fillMaxWidth(),
-            shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.inverseSurface,
-                contentColor = MaterialTheme.colorScheme.surface
-            )
-        ) {
-            Text("Log in with Email")
-        }
+            Spacer(modifier = Modifier.height(16.dp))
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Button(
-            onClick = { navController.navigate("register") }, modifier = Modifier.fillMaxWidth(),
-            shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.inverseSurface,
-                contentColor = MaterialTheme.colorScheme.surface
-            )
-        ) {
-            Text("Register with Email")
+            Button(
+                onClick = { navController.navigate("register") },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.inverseSurface,
+                    contentColor = MaterialTheme.colorScheme.surface
+                )
+            ) {
+                Text("Register with Email")
+            }
         }
     }
 }
 
+fun handleSignIn(
+    result: GetCredentialResponse,
+    context: android.content.Context,
+    navController: NavController,
+    firestore: FirebaseFirestore,
+    auth: FirebaseAuth
+) {
+    val credential = result.credential
+    when (credential) {
+        is CustomCredential -> {
+            if (credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
+                try {
+                    val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
+                    val idToken = googleIdTokenCredential.idToken
+                    val firebaseCredential = GoogleAuthProvider.getCredential(idToken, null)
+
+                    auth.signInWithCredential(firebaseCredential)
+                        .addOnSuccessListener {
+                            val user = auth.currentUser
+                            user?.let {
+                                val usersCollection = FirebaseFirestore.getInstance().collection("users")
+                                val userDocRef = usersCollection.document(user.uid)
+
+                                userDocRef.get().addOnSuccessListener { document ->
+                                    if (!document.exists()) {
+                                        // Only set data if user doc doesn't exist
+                                        val userData = mapOf(
+                                            "user_id" to 0,
+                                            "username" to (user.displayName ?: ""),
+                                            "email" to (user.email ?: ""),
+                                            "address_token" to "",
+                                            "password" to "google_oauth",
+                                            "hasWallet" to false
+                                        )
+                                        userDocRef.set(userData)
+                                    }
+
+                                    val hasWallet = document.getBoolean("hasWallet") == true
+                                    navController.navigate(if (hasWallet) "home" else "add_wallet") {
+                                        popUpTo("startup") { inclusive = true }
+                                    }
+                                }
+                            }
+                        }
+                        .addOnFailureListener {
+                            Toast.makeText(context, "Firebase sign-in failed", Toast.LENGTH_SHORT).show()
+                        }
+                } catch (e: GoogleIdTokenParsingException) {
+                    Log.e("GoogleLogin", "Invalid token: ${e.message}")
+                }
+            } else {
+                Log.e("GoogleLogin", "Unsupported credential type")
+            }
+        }
+        else -> Log.e("GoogleLogin", "Unexpected credential type")
+    }
+}
 
 @Composable
 fun OrDivider(
@@ -240,28 +247,14 @@ fun OrDivider(
             .padding(vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Divider(
-            color = color,
-            thickness = thickness,
-            modifier = Modifier.weight(1f)
-        )
-        Text(
-            text = text,
-            modifier = Modifier.padding(horizontal = 8.dp),
-            color = color
-        )
-        Divider(
-            color = color,
-            thickness = thickness,
-            modifier = Modifier.weight(1f)
-        )
+        Divider(color = color, thickness = thickness, modifier = Modifier.weight(1f))
+        Text(text = text, modifier = Modifier.padding(horizontal = 8.dp), color = color)
+        Divider(color = color, thickness = thickness, modifier = Modifier.weight(1f))
     }
 }
-
-
 
 @Preview(showBackground = true)
 @Composable
 fun StartupScreenPreview() {
-    }
-
+    // Preview content if needed
+}
