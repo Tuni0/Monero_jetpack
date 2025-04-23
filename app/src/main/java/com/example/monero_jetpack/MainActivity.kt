@@ -88,6 +88,8 @@ import com.google.accompanist.permissions.rememberPermissionState
 import com.google.accompanist.permissions.shouldShowRationale
 import android.provider.Settings  // For Settings.ACTION_APPLICATION_DETAILS_SETTINGS
 import android.util.Log
+import android.view.View
+import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -160,7 +162,10 @@ import com.google.accompanist.swiperefresh.SwipeRefresh
 import com.google.accompanist.swiperefresh.rememberSwipeRefreshState
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.SystemBarStyle
+import androidx.browser.trusted.TrustedWebActivityDisplayMode.ImmersiveMode
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.ShowChart
@@ -168,11 +173,18 @@ import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.ShowChart
 import androidx.compose.material.icons.outlined.SwapHoriz
+import androidx.compose.runtime.MutableState
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.MediaItem
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
 import androidx.navigation.NavController
 import com.google.firebase.firestore.FirebaseFirestore
+import androidx.core.net.toUri
 
 class MainActivity : ComponentActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
 
         super.onCreate(savedInstanceState)
@@ -234,7 +246,9 @@ class MainActivity : ComponentActivity() {
                         composable("add_wallet") {
                             AddWalletScreen(navController = navController, viewModel = walletViewModel)
                         }
-
+                        composable("settings") {
+                            SettingsScreen(viewModel = walletViewModel) // ✅ passing it manually
+                        }
                         composable("swap") { SwapScreen(navController = navController, viewModel = walletViewModel) } // ✅ pass ViewModel here
 
 
@@ -288,11 +302,13 @@ fun MainScreen(navController: NavController, viewModel:WalletViewModel ) {
     val density = LocalDensity.current
     val context = LocalContext.current
     LaunchedEffect(Unit) {
+        viewModel.fetchXmrPriceHistory()
         if (viewModel.selectedWalletId.value == null) {
             viewModel.loadSelectedWallet(context)
         }
     }
     var flag by remember { mutableStateOf(false) }
+    val isFullscreen = remember { mutableStateOf(false) }
 
 
 
@@ -312,20 +328,14 @@ fun MainScreen(navController: NavController, viewModel:WalletViewModel ) {
                                 contentScale = ContentScale.Fit,
                                 modifier = Modifier
                                     .size(20.dp)
-                                    .clip(CircleShape) // Optional for circular background
+                                    .clip(CircleShape), // Optional for circular background
+                                colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Color.White)
                             )
                             Text(text = "Monero Wallet", fontSize = 25.sp)
                         }
                     },
                     actions = {
-                        IconButton(onClick = {
 
-                        }) {
-                            Icon(
-                                imageVector = Icons.Filled.Person,
-                                contentDescription = "Login"
-                            )
-                        }
 
                         IconButton(onClick = {
                             val intent = Intent(context, SettingsActivity::class.java)
@@ -402,12 +412,13 @@ fun MainScreen(navController: NavController, viewModel:WalletViewModel ) {
                             onRefresh = { viewModel.fetchWalletData(context) },
                             onShowQRCode = { showQRCode = true },
                             onShowPayment = { showPayment = true },
+                            viewModel = viewModel,
                             walletName = walletName
                         )
 
                         1 -> TransactionsScreen(transactions)
                         2 -> SwapScreen(navController = navController,viewModel=viewModel) // ✅ THIS is correct
-                        3 -> MarketScreen()
+                        3 -> MarketScreen(isLoading = isLoading, onRefresh = { viewModel.fetchWalletData(context) }, viewModel = viewModel,isFullscreen = isFullscreen )
                     }
                 }
             }
@@ -456,8 +467,15 @@ fun MainScreen(navController: NavController, viewModel:WalletViewModel ) {
 
                 }
 
-
-
+        // 🔥 Immersive system UI control
+        ImmersiveMode(isFullscreen.value)
+        // 🔥 Place FULLSCREEN PLAYER on top of everything else
+        if (isFullscreen.value) {
+            FullscreenVideoPlayer(
+                uri = Uri.parse("https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4"),
+                onClose = { isFullscreen.value = false }
+            )
+        }
 
             }
             // Show QR Code Fullscreen When Activated
@@ -467,12 +485,189 @@ fun MainScreen(navController: NavController, viewModel:WalletViewModel ) {
             if(showPayment){
                 TransactionCard(onDismiss = { showPayment = false }, onSend = { qrCode, amount -> showPayment = false })
             }
+
+}
+
+@Composable
+fun VideoItem(videoUri: Uri) {
+    val isFullscreen = remember { mutableStateOf(false) }
+
+    if (isFullscreen.value) {
+        FullscreenVideoPlayer(
+            uri = videoUri,
+            onClose = { isFullscreen.value = false }
+        )
+    } else {
+        VideoPlayer(
+            uri = videoUri,
+            modifier = Modifier.fillMaxWidth(),
+            onExpandClick = { isFullscreen.value = true }
+        )
     }
+}
+
 
 
 @Composable
-fun MarketScreen() {
-    TODO("Not yet implemented")
+fun VideoPlayer(
+    uri: Uri,
+    modifier: Modifier = Modifier,
+    onExpandClick: () -> Unit = {}
+) {
+    val context = LocalContext.current
+
+    Box(modifier = modifier) {
+        AndroidView(
+            factory = {
+                PlayerView(context).apply {
+                    player = ExoPlayer.Builder(context).build().apply {
+                        setMediaItem(MediaItem.fromUri(uri))
+                        prepare()
+                        playWhenReady = false
+                    }
+                    useController = true
+                    layoutParams = FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.WRAP_CONTENT
+                    )
+                }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(200.dp)
+        )
+
+        IconButton(
+            onClick = onExpandClick,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(8.dp)
+                .background(Color.Black.copy(alpha = 0.4f), shape = CircleShape)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Fullscreen, // ⛶ icon
+                contentDescription = "Expand",
+                tint = Color.White
+            )
+        }
+    }
+}
+
+@Composable
+fun ImmersiveMode(isFullscreen: Boolean) {
+    val activity = LocalContext.current as Activity
+    SideEffect {
+        if (isFullscreen) {
+            activity.window.decorView.systemUiVisibility = (
+                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                            or View.SYSTEM_UI_FLAG_FULLSCREEN
+                            or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                    )
+        } else {
+            activity.window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
+        }
+    }
+}
+
+@Composable
+fun FullscreenVideoPlayer(
+    uri: Uri,
+    onClose: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize().zIndex(99f)
+            .background(Color.Black)
+    ) {
+        AndroidView(
+            factory = { context ->
+                PlayerView(context).apply {
+                    player = ExoPlayer.Builder(context).build().apply {
+                        setMediaItem(MediaItem.fromUri(uri))
+                        prepare()
+                        playWhenReady = true
+                    }
+                    useController = true
+                    layoutParams = FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.MATCH_PARENT
+                    )
+                }
+            },
+            modifier = Modifier.fillMaxSize()
+        )
+
+        IconButton(
+            onClick = onClose,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(16.dp)
+                .background(Color.Black.copy(alpha = 0.5f), shape = CircleShape)
+        ) {
+            Icon(
+                imageVector = Icons.Default.FullscreenExit,
+                contentDescription = "Exit Fullscreen",
+                tint = Color.White
+            )
+        }
+    }
+}
+
+
+@Composable
+fun MarketScreen(isLoading: Boolean, onRefresh: () -> Unit, viewModel: WalletViewModel, isFullscreen: MutableState<Boolean>
+) {
+    val videoUri =
+        "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4".toUri()
+    val isFullscreen = remember { mutableStateOf(false) }
+
+    val refreshState = rememberSwipeRefreshState(isRefreshing = isLoading)
+
+
+
+    Box(Modifier.fillMaxSize()) {
+
+        SwipeRefresh(state = refreshState, onRefresh = onRefresh) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                item {
+                    if (isLoading) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
+                        }
+                    } else {
+                        XmrPriceChart(viewModel = viewModel)
+                    }
+                }
+                item {
+                    Text("Video Example", modifier = Modifier.padding(16.dp))
+                    VideoPlayer(
+                        uri = videoUri,
+                        onExpandClick = { isFullscreen.value = true }
+                    )
+                }
+
+            }
+        }
+
+        // Show fullscreen on top
+        if (isFullscreen.value) {
+            FullscreenVideoPlayer(
+                uri = videoUri,
+                onClose = { isFullscreen.value = false }
+            )
+        }
+    }
+
 }
 
 @Composable
@@ -516,7 +711,7 @@ fun SwapScreen(
 
                             },
                         colors = CardDefaults.cardColors(
-                            containerColor = if (walletId == selectedWalletId) Color.Gray else MaterialTheme.colorScheme.surface
+                            containerColor = if (walletId == selectedWalletId) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.surface
                         )
                     ) {
                         Row(
@@ -526,7 +721,10 @@ fun SwapScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(text = walletId, fontWeight = FontWeight.Medium)
+                            Text(text = walletId,
+                                fontWeight = FontWeight.Medium,
+                                color = if (walletId == selectedWalletId) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.onSurface
+                            )
                             if (walletId == selectedWalletId) {
                                 Icon(Icons.Default.Check, contentDescription = "Selected")
                             }
@@ -544,9 +742,11 @@ fun SwapScreen(
                 .fillMaxWidth()
                 .padding(top = 16.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary
-            )
-        ) {
+                containerColor = MaterialTheme.colorScheme.inverseSurface
+            ),
+            shape = RoundedCornerShape(8.dp),
+
+            ) {
             Icon(Icons.Default.Add, contentDescription = "Add Wallet")
             Spacer(modifier = Modifier.width(8.dp))
             Text("Add New Wallet")
@@ -554,8 +754,6 @@ fun SwapScreen(
     }
 
 }
-
-
 
 @Composable
 fun TransactionsScreen(transactions: List<Transaction>) {
@@ -664,6 +862,7 @@ fun Dashboard(
     onRefresh: () -> Unit,
     onShowQRCode: () -> Unit,
     onShowPayment: ()->Unit,
+    viewModel: WalletViewModel,
     walletName:String
 
 ) {
@@ -855,8 +1054,6 @@ fun Dashboard(
                 }
             }
 
-
-
             item {
                 if (isLoading) {
                     Box(
@@ -868,9 +1065,11 @@ fun Dashboard(
                         CircularProgressIndicator()
                     }
                 } else {
-                    MonochromeLineChart(viewModel = WalletViewModel())
+                    MonochromeLineChart(viewModel = viewModel)
                 }
             }
+
+
 
             item {
                 OutlinedCard(
@@ -890,14 +1089,24 @@ fun Dashboard(
                         )
 
                         Spacer(modifier = Modifier.height(12.dp))
-
+                        if (recentTransactions.isEmpty()) {
+                            Text(
+                                text = "No transactions to display.",
+                                color = MaterialTheme.colorScheme.error,
+                                fontSize = 16.sp,
+                                modifier = Modifier.padding(top = 20.dp)
+                            )
+                        } else {
                         recentTransactions.forEach { tx ->
+
                             val isIncome = tx.type == "in"
                             val icon =
                                 if (isIncome) Icons.Filled.SouthWest else Icons.Filled.NorthEast
                             val bgColor = if (isIncome) Color(0xFFDFFFE3) else Color(0xFFFFE3E3)
-                            val iconColor = if (isIncome) Color(0xFF0BAF3C) else Color(0xFFE53935)
-                            val formattedAmount = (if (isIncome) "+" else "-") + "${tx.amount} XMR"
+                            val iconColor =
+                                if (isIncome) Color(0xFF0BAF3C) else Color(0xFFE53935)
+                            val formattedAmount =
+                                (if (isIncome) "+" else "-") + "${tx.amount} XMR"
 
                             Row(
                                 modifier = Modifier
@@ -945,6 +1154,7 @@ fun Dashboard(
                     }
                 }
             }
+        }
 
 
         }
@@ -1002,12 +1212,13 @@ fun TransactionDeltaLineChart(viewModel: WalletViewModel) {
     }
 }
 
+
 fun List<Transaction>.toBlackWhiteChart(color: Color): Line {
     val values = map { tx ->
         if (tx.type == "in") tx.amount else -tx.amount
     }
     return Line(
-        label = "Monochrome",
+        label = "My transaction history",
         values = values + (-0.5)+ 0.5 + (-0.5)+0.5,
         color = SolidColor(color),
         drawStyle = ir.ehsannarmani.compose_charts.models.DrawStyle.Stroke(
@@ -1020,6 +1231,21 @@ fun List<Transaction>.toBlackWhiteChart(color: Color): Line {
 
     )
 }
+
+fun List<PricePoint>.toMoneroPriceChartLine(color: Color): Line {
+    val values = this.map { it.price }
+    return Line(
+        label = "XMR Price (USD)",
+        values = values,
+        color = SolidColor(color),
+        drawStyle = ir.ehsannarmani.compose_charts.models.DrawStyle.Stroke(width = 3.dp),
+        firstGradientFillColor = color.copy(alpha = 0.2f),
+        secondGradientFillColor = color.copy(alpha = 0.1f),
+        strokeAnimationSpec = tween(1500),
+    )
+}
+
+
 fun getExampleTransactions(): List<Transaction> {
     return listOf(
         Transaction(type = "out", amount = 0.4, fee = 0.01),
@@ -1103,6 +1329,70 @@ fun MonochromeLineChart(viewModel: WalletViewModel) {
                 )
             ),
 
+        )
+    }
+}
+
+@Composable
+fun XmrPriceChart(viewModel: WalletViewModel) {
+    val priceHistory by viewModel.priceHistory.collectAsState()
+    val priceLabels by viewModel.priceLabels.collectAsState()
+
+    LaunchedEffect(priceHistory) {
+        Log.d("XMR_PRICE", "Chart received ${priceHistory.size} points")
+        Log.d("XMR_PRICE", "Chart labels ${priceLabels.size} points")
+    }
+    val themeColor = MaterialTheme.colorScheme.onSurface
+    if (priceHistory.isNotEmpty()) {
+        val line = remember(priceHistory,themeColor) {
+            listOf(priceHistory.toMoneroPriceChartLine(themeColor))
+        }
+
+        LineChart(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(200.dp)
+                .padding(horizontal = 22.dp),
+            data = line,
+            animationMode = AnimationMode.Together(delayBuilder = { it * 300L }),
+            minValue = priceHistory.minOf { it.price } * 0.95,
+            maxValue = priceHistory.maxOf { it.price } * 1.05,
+            zeroLineProperties = ZeroLineProperties(enabled = false),
+            gridProperties = GridProperties(enabled = true),
+            labelProperties = LabelProperties(
+                labels = priceLabels,
+                enabled = true,
+                textStyle = TextStyle(
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            ),
+            indicatorProperties = HorizontalIndicatorProperties(
+                enabled = true,
+                textStyle = TextStyle(
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            ),
+            labelHelperProperties = LabelHelperProperties(
+                enabled = true,
+                textStyle = TextStyle(
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            ),
+        )
+    } else {
+        Text(
+            text = "Loading price history...",
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp),
+            color = MaterialTheme.colorScheme.onSurface,
+            fontSize = 16.sp
         )
     }
 }

@@ -25,12 +25,22 @@ import okhttp3.RequestBody
 import org.json.JSONObject
 import java.io.IOException
 import org.json.*  // w razie czego, ale ten wyżej powinien wystarczyć
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 data class Transaction(val amount: Double, val fee: Double, val type: String)
+data class PricePoint(val timestamp: Long, val price: Double)
 
 class WalletViewModel : ViewModel() {
 
     private val fetchMutex = Mutex()
+
+    private val _priceHistory = MutableStateFlow<List<PricePoint>>(emptyList())
+    val priceHistory: StateFlow<List<PricePoint>> = _priceHistory
+
+    private val _priceLabels = MutableStateFlow<List<String>>(emptyList())
+    val priceLabels: StateFlow<List<String>> = _priceLabels
 
     private val _userName = MutableStateFlow("Name")
     val userName: StateFlow<String> = _userName
@@ -65,6 +75,68 @@ class WalletViewModel : ViewModel() {
     private fun getPrefs(context: Context): SharedPreferences {
         return context.getSharedPreferences("wallet_prefs", Context.MODE_PRIVATE)
     }
+
+    fun fetchXmrPriceHistory() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val client = OkHttpClient()
+                val request = Request.Builder()
+                    .url("https://api.coingecko.com/api/v3/coins/monero/market_chart?vs_currency=usd&days=30")
+                    .build()
+
+                val response = client.newCall(request).execute()
+
+                if (!response.isSuccessful) {
+                    Log.e("WALLET_VM", "Failed to fetch XMR price history")
+                    return@launch
+                }
+
+                // ✅ Read string ONCE
+                val bodyString = response.body?.string() ?: return@launch
+
+                // ✅ OPTIONAL: Log the string if needed
+                Log.d("WALLET_VM", "Price history response: $bodyString")
+
+                // ✅ Parse using saved string
+                val jsonObject = JSONObject(bodyString)
+                val pricesArray = jsonObject.getJSONArray("prices")
+
+                val history = mutableListOf<PricePoint>()
+                val rawTimestamps = mutableListOf<Long>()
+
+                for (i in 0 until pricesArray.length()) {
+                    val entry = pricesArray.getJSONArray(i)
+                    val timestamp = entry.getLong(0)
+                    val price = entry.getDouble(1)
+
+                    history.add(PricePoint(timestamp, price))
+                    rawTimestamps.add(timestamp)
+                }
+
+                // 🗓 Wybierz 5 równomiernie rozłożonych dat
+                val labelCount = 5
+                val step = history.size / labelCount
+                val selectedIndexes = (0 until history.size step step).take(labelCount)
+
+                val sdf = SimpleDateFormat("dd/MM", Locale.getDefault())
+                val labels = selectedIndexes.map { index ->
+                    sdf.format(Date(history[index].timestamp))
+                }
+
+
+                _priceHistory.value = history
+                Log.d("WALLET_VM", "Labels: $labels")
+                _priceLabels.value = labels
+                Log.d("WALLET_VM", "Parsed and saved ${history.size} price points")
+
+            } catch (e: IOException) {
+                Log.e("WALLET_VM", "Network error: ${e.message}")
+            } catch (e: Exception) {
+                Log.e("WALLET_VM", "Error parsing price history: ${e.message}")
+            }
+        }
+    }
+
 
     fun getEntropyForWallet(context: Context, walletId: String): String? {
         val prefs = getPrefs(context)
@@ -155,7 +227,7 @@ class WalletViewModel : ViewModel() {
             return
         }
         viewModelScope.launch(Dispatchers.IO) {
-            Log.d("WALLET_VM", "fetchWalletData called from: ${Throwable().stackTraceToString().split('\n')[1]}")
+
 
             fetchMutex.withLock {
                 Log.d("WALLET_VM", "Fetching wallet data for $walletId")

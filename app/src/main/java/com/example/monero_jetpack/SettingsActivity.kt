@@ -2,6 +2,7 @@ package com.example.monero_jetpack // Change the package name here
 
 import android.content.Intent
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -29,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.NorthEast
@@ -37,6 +39,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -54,10 +57,13 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarColors
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -78,6 +84,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.monero_jetpack.ui.theme.Monero_jetpackTheme
 import com.google.firebase.auth.FirebaseAuth
 
@@ -96,7 +103,7 @@ class SettingsActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.surface
                 ) {
-                    SettingsScreen()
+                    SettingsScreen(WalletViewModel())
                 }
             }
         }
@@ -105,9 +112,15 @@ class SettingsActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(viewModel: WalletViewModel ) {
     val context = LocalContext.current
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var showLogoutDialog by remember { mutableStateOf(false) }
+    var showDeleteWalletDialog by remember { mutableStateOf(false) }
 
+    LaunchedEffect(Unit) {
+        viewModel.loadWalletIds(context)
+    }
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             topBar = {
@@ -176,19 +189,14 @@ fun SettingsScreen() {
                             .padding(16.dp)
                     ) {
                         OutlinedButton(
-                            onClick = {
-                                FirebaseAuth.getInstance().signOut()
-                                val intent = Intent(context, MainActivity::class.java).apply {
-                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                                }
-                                context.startActivity(intent)},
+                            onClick = {showLogoutDialog = true},
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(8.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.surface,
                                 contentColor = MaterialTheme.colorScheme.onSurface
                             ),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error)
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.errorContainer)
                         ) {
                             Text("Log out")
                         }
@@ -196,14 +204,14 @@ fun SettingsScreen() {
                         Spacer(modifier = Modifier.height(8.dp))
 
                         OutlinedButton(
-                            onClick = { },
+                            onClick = { showDeleteWalletDialog = true },
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(8.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.surface,
                                 contentColor = MaterialTheme.colorScheme.onSurface
                             ),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error)
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.errorContainer)
                         ) {
                             Text("Delete wallet")
                         }
@@ -211,22 +219,147 @@ fun SettingsScreen() {
                         Spacer(modifier = Modifier.height(8.dp))
 
                         Button(
-                            onClick = { },
+                            onClick = { showDeleteDialog = true },
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(8.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.error,
-                                contentColor = MaterialTheme.colorScheme.onError
+                                containerColor = MaterialTheme.colorScheme.errorContainer,
+                                contentColor = MaterialTheme.colorScheme.onErrorContainer
                             )
                         ) {
                             Text("Delete account")
                         }
+
+                        if (showDeleteDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showDeleteDialog = false },
+                                title = { Text("Are you sure?") },
+                                text = { Text("This will permanently delete your account and cannot be undone.") },
+                                confirmButton = {
+                                    TextButton(
+                                        onClick = {
+                                            val user = FirebaseAuth.getInstance().currentUser
+                                            user?.delete()?.addOnCompleteListener { task ->
+                                                if (task.isSuccessful) {
+                                                    val intent = Intent(context, MainActivity::class.java).apply {
+                                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                                                    }
+                                                    context.startActivity(intent)
+                                                } else {
+                                                    Toast.makeText(context, "Failed to delete account", Toast.LENGTH_LONG).show()
+                                                }
+                                            }
+                                            showDeleteDialog = false
+                                        },
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier
+                                            .height(48.dp),
+                                    ) {
+                                        Text("Delete",color = MaterialTheme.colorScheme.error)
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showDeleteDialog = false },
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier
+                                            .height(48.dp),
+                                        ) {
+                                        Text("Cancel",color = MaterialTheme.colorScheme.error)
+                                    }
+                                })
+                        }
+                        if (showLogoutDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showLogoutDialog = false },
+                                title = { Text("Are you sure?") },
+                                text = { Text("Do you want to log out?") },
+                                containerColor = MaterialTheme.colorScheme.errorContainer ,
+                                textContentColor = MaterialTheme.colorScheme.onErrorContainer,
+                                confirmButton = {
+                                    TextButton(
+                                        onClick = {
+                                            FirebaseAuth.getInstance().signOut()
+                                            val intent = Intent(context, MainActivity::class.java).apply {
+                                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                                            }
+                                            context.startActivity(intent)
+                                            showLogoutDialog = false
+                                        },
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier
+                                            .height(48.dp),
+                                    ) {
+                                        Text("Delete")
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showLogoutDialog = false },
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier
+                                            .height(48.dp),) {
+                                        Text("Cancel")
+                                    }
+
+                                })
+                        }
+                        if (showDeleteWalletDialog) {
+                            WalletDeleteDialog(
+                                walletList = viewModel.walletList.collectAsState().value,
+                                onDelete = { walletId ->
+                                    viewModel.deleteWallet(walletId, context)
+                                    Toast.makeText(context, "Deleted $walletId", Toast.LENGTH_SHORT).show()
+                                    showDeleteWalletDialog = false
+                                },
+                                onDismiss = { showDeleteWalletDialog = false }
+                            )
+                        }
+
+
                     }
                 }
             }
         )
     }
 }
+
+@Composable
+fun WalletDeleteDialog(
+    walletList: List<String>,
+    onDelete: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Delete Wallet") },
+        text = {
+            Column {
+                if (walletList.isEmpty()) {
+                    Text("No wallets available.")
+                } else {
+                    walletList.forEach { walletId ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 6.dp)
+                                .clickable { onDelete(walletId) },
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(walletId)
+                            Icon(Icons.Default.Delete, contentDescription = null)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
 
 @Composable
 fun SectionHeader(title: String) {
@@ -254,5 +387,5 @@ fun SettingRow(title: String, onClick: () -> Unit) {
 @Preview(showBackground = true)
 @Composable
 fun SettingsScreenPreview() {
-    SettingsScreen()
+    SettingsScreen(WalletViewModel())
 }
