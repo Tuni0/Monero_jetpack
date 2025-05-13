@@ -51,23 +51,23 @@ fun AddWalletScreen(navController: NavController, viewModel: WalletViewModel) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Monero Wallet", fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        Text("Monero Wallet", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.inverseSurface)
         Spacer(modifier = Modifier.height(32.dp))
         Box(
             modifier = Modifier
                 .size(100.dp)
                 .clip(CircleShape)
-                .background(Color.LightGray),
+                .background(MaterialTheme.colorScheme.inverseSurface),
             contentAlignment = Alignment.Center
         ) {
             Text("+", fontSize = 32.sp, fontWeight = FontWeight.Bold)
         }
         Spacer(modifier = Modifier.height(24.dp))
-        Text("Create a new wallet", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+        Text("Create a new wallet", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.inverseSurface)
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = "We will generate a new wallet for you with a recovery phrase",
-            color = Color.Gray,
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
             fontSize = 14.sp,
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(horizontal = 16.dp)
@@ -167,8 +167,8 @@ fun AddWalletScreen(navController: NavController, viewModel: WalletViewModel) {
                 .fillMaxWidth()
                 .height(50.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = Color.Black,
-                contentColor = Color.White
+                containerColor = MaterialTheme.colorScheme.inverseSurface,
+                contentColor = MaterialTheme.colorScheme.inverseOnSurface
             ),
             shape = RoundedCornerShape(10.dp)
         ) {
@@ -187,8 +187,8 @@ fun AddWalletScreen(navController: NavController, viewModel: WalletViewModel) {
                 .fillMaxWidth()
                 .height(50.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = Color.Black,
-                contentColor = Color.White
+                containerColor = MaterialTheme.colorScheme.inverseSurface,
+                contentColor = MaterialTheme.colorScheme.inverseOnSurface
             ),
             shape = RoundedCornerShape(10.dp)
         ) {
@@ -236,8 +236,8 @@ fun MnemonicPopup(mnemonic: String, onClose: () -> Unit) {
                         clipboardManager.setText(AnnotatedString(mnemonic))
                     },
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.DarkGray,
-                        contentColor = Color.White
+                        containerColor = MaterialTheme.colorScheme.inverseSurface,
+                        contentColor = MaterialTheme.colorScheme.inverseOnSurface
                     )
                 ) {
                     Text("Copy to Clipboard")

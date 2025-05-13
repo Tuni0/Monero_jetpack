@@ -111,5 +111,10 @@ dependencies {
     implementation ("io.github.ehsannarmani:compose-charts:0.1.2")
     implementation (libs.androidx.material.icons.extended)
 
+    implementation (libs.accompanist.systemuicontroller)
+    implementation (libs.androidx.lifecycle.runtime.ktx.v251) // or the latest version
+    implementation ("androidx.lifecycle:lifecycle-viewmodel-ktx:2.5.1") // if you're using ViewModel
+    implementation ("androidx.lifecycle:lifecycle-process:2.5.1")
+
 }
 

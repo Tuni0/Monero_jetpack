@@ -20,13 +20,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -34,7 +30,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.Button
@@ -61,6 +56,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.zIndex
 import android.graphics.Bitmap
 import android.net.Uri
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -74,7 +70,6 @@ import com.google.zxing.common.BitMatrix
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.LaunchedEffect
@@ -89,64 +84,44 @@ import com.google.accompanist.permissions.rememberPermissionState
 import com.google.accompanist.permissions.shouldShowRationale
 import android.provider.Settings  // For Settings.ACTION_APPLICATION_DETAILS_SETTINGS
 import android.util.Log
-import android.view.View
-import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.EaseInOutCubic
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.collectAsState
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.TileMode
-import androidx.compose.ui.graphics.drawscope.DrawStyle
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import ir.ehsannarmani.compose_charts.LineChart
 import ir.ehsannarmani.compose_charts.models.AnimationMode
 import ir.ehsannarmani.compose_charts.models.Line
-import ir.ehsannarmani.compose_charts.models.LineProperties
 import ir.ehsannarmani.compose_charts.models.ZeroLineProperties
-import androidx.compose.foundation.text.input.TextFieldLineLimits
-import androidx.compose.foundation.text.input.rememberTextFieldState
-import androidx.compose.material.icons.filled.AccountBox
 import androidx.compose.material.icons.filled.NorthEast
 import androidx.compose.material.icons.filled.SouthWest
-import androidx.compose.material.icons.outlined.AccountBox
 import androidx.compose.material.icons.outlined.CopyAll
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -158,35 +133,40 @@ import ir.ehsannarmani.compose_charts.models.HorizontalIndicatorProperties
 import ir.ehsannarmani.compose_charts.models.LabelHelperProperties
 import ir.ehsannarmani.compose_charts.models.LabelProperties
 import ir.ehsannarmani.compose_charts.models.StrokeStyle
-import ir.ehsannarmani.compose_charts.models.VerticalIndicatorProperties
 import com.google.accompanist.swiperefresh.SwipeRefresh
 import com.google.accompanist.swiperefresh.rememberSwipeRefreshState
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.SystemBarStyle
-import androidx.browser.trusted.TrustedWebActivityDisplayMode.ImmersiveMode
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
-import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.ShowChart
 import androidx.compose.material.icons.outlined.SwapHoriz
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.MutableState
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.media3.common.MediaItem
-import androidx.media3.exoplayer.ExoPlayer
+import androidx.compose.ui.window.Dialog
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleObserver
+import androidx.lifecycle.OnLifecycleEvent
+import androidx.lifecycle.ProcessLifecycleOwner
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
 import androidx.navigation.NavController
+import androidx.navigation.compose.currentBackStackEntryAsState
 import com.google.firebase.firestore.FirebaseFirestore
-import androidx.core.net.toUri
 import java.util.Locale
+import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
 
@@ -194,6 +174,8 @@ class MainActivity : ComponentActivity() {
 
         super.onCreate(savedInstanceState)
         FirebaseApp.initializeApp(this)
+        // Set up lifecycle observer to handle app lifecycle events
+
 
         setContent {
             enableEdgeToEdge(
@@ -206,7 +188,9 @@ class MainActivity : ComponentActivity() {
                 val navController = rememberNavController()
                 val walletViewModel: WalletViewModel = viewModel() // ✅ shared ViewModel
                 val videoPlayerViewModel: VideoPlayerViewModel = viewModel() // ✅ shared ViewModel
-
+                LaunchedEffect(Unit) {
+                    ProcessLifecycleOwner.get().lifecycle.addObserver(AppLifecycleObserver(videoPlayerViewModel))
+                }
                 // 👇 auto-login if already signed in
                 val auth = FirebaseAuth.getInstance()
                 var startDestination by remember { mutableStateOf<String?>(null) }
@@ -247,7 +231,13 @@ class MainActivity : ComponentActivity() {
                         composable("login") { LoginScreen(navController) }
                         composable("register") { RegisterScreen(navController) }
                         composable("home") {
-                            MainScreen(navController = navController, viewModel = walletViewModel, viewModel2 = videoPlayerViewModel)
+                            BackGestureHandlerWithDialog(onExit = { finish() }, viewmodel2=videoPlayerViewModel) {
+                                MainScreen(
+                                    navController = navController,
+                                    viewModel = walletViewModel,
+                                    viewModel2 = videoPlayerViewModel
+                                )
+                            }
                         }
                         composable("add_wallet") {
                             AddWalletScreen(navController = navController, viewModel = walletViewModel)
@@ -268,16 +258,107 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+}
+
+@Composable
+fun ExitConfirmationDialog(
+    onDismiss: () -> Unit,
+    onExit: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.background,
+            shape = MaterialTheme.shapes.medium
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Are you sure you want to exit?",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = onDismiss,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)
+                    ) {
+                        Text("Cancel")
+                    }
+
+                    Button(
+                        onClick = onExit,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Text("Exit")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun BackGestureHandlerWithDialog(
+    onExit: () -> Unit,
+    viewmodel2: VideoPlayerViewModel,
+    content: @Composable () -> Unit
+) {
+    var showExitDialog by remember { mutableStateOf(false) }
+
+    // Observe fullscreen state from the ViewModel (should be a MutableState<Boolean>)
+    val isFullscreen by remember { derivedStateOf { viewmodel2.isFullscreen } }
+
+    // Handle back gesture
+    BackHandler {
+        if (isFullscreen) {
+            viewmodel2.isFullscreen = false
+        } else {
+            showExitDialog = true
+        }
+    }
+
+    // Show the exit confirmation dialog if needed
+    if (showExitDialog) {
+        ExitConfirmationDialog(
+            onDismiss = { showExitDialog = false },
+            onExit = onExit
+        )
+    }
+
+    // Render the wrapped content
+    content()
 }
 
 
+class AppLifecycleObserver(
+    private val viewModel: VideoPlayerViewModel
+) : LifecycleObserver {
 
-data class NavigationItem(
-    val title: String,
-    val selectedIcon: ImageVector,
-    val unselectedIcon: ImageVector,
-)
+    @OnLifecycleEvent(Lifecycle.Event.ON_STOP)
+    fun onAppBackgrounded() {
+        Log.d("LifecycleObserver", "App in background — stopping video")
+        viewModel.stopPlayer()
+    }
 
+    @OnLifecycleEvent(Lifecycle.Event.ON_DESTROY)
+    fun onAppClosed() {
+        Log.d("LifecycleObserver", "App destroyed — releasing player")
+        viewModel.releasePlayer()
+    }
+}
+
+@RequiresApi(Build.VERSION_CODES.R)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(navController: NavController, viewModel:WalletViewModel,viewModel2: VideoPlayerViewModel ) {
@@ -307,7 +388,6 @@ fun MainScreen(navController: NavController, viewModel:WalletViewModel,viewModel
         )
     var showQRCode by remember { mutableStateOf(false) } // <-- Lifted State
     var showPayment by remember { mutableStateOf(false) } // <-- Lifted State
-
     val navigationBarHeight = remember { mutableStateOf(0.dp) }
     val density = LocalDensity.current
     val context = LocalContext.current
@@ -317,9 +397,16 @@ fun MainScreen(navController: NavController, viewModel:WalletViewModel,viewModel
             viewModel.loadSelectedWallet(context)
         }
     }
+    LaunchedEffect(selectedItem) {
+        if (selectedItem != 3) {
+            viewModel2.stopPlayer()
+            viewModel2.resetPlayer()
+            viewModel2.shouldPlayVideo = false
+            viewModel2.releasePlayer()
+        }
+    }
+
     var flag by remember { mutableStateOf(false) }
-    val isFullscreen = remember { mutableStateOf(false) }
-    var shouldPlayVideo by remember { mutableStateOf(false) }
 
 
 
@@ -436,15 +523,15 @@ fun MainScreen(navController: NavController, viewModel:WalletViewModel,viewModel
                             isLoading = isLoading,
                             onRefresh = { viewModel.fetchWalletData(context) },
                             viewModel = viewModel,
-                            isFullscreen = isFullscreen,
+                            isFullscreen = viewModel2.isFullscreen,
                             viewModel2 = viewModel2,
                             onPlayClicked = {
                                 viewModel2.initializePlayer(
                                     context,
                                     "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4"
                                 )
-                                shouldPlayVideo = true
-                                isFullscreen.value = true
+                                viewModel2.shouldPlayVideo = true
+                                viewModel2.isFullscreen = true
                             }
                         )
                     }
@@ -498,14 +585,14 @@ fun MainScreen(navController: NavController, viewModel:WalletViewModel,viewModel
 
     }
         // 🔥 Place FULLSCREEN PLAYER on top of everything else
-        if (shouldPlayVideo && isFullscreen.value) {
+        if (viewModel2.isFullscreen) {
             VideoView2(
                 videoUri = "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4",
                 onFullScreenToggle = {
-                    isFullscreen.value = false
-                    shouldPlayVideo = false
+                    viewModel2.isFullscreen = false
+                    viewModel2.shouldPlayVideo = false
                 },
-                isFullScreen = isFullscreen,
+                isFullScreen = viewModel2.isFullscreen,
                 viewModel = viewModel2
             )
         }
@@ -517,7 +604,7 @@ fun MainScreen(navController: NavController, viewModel:WalletViewModel,viewModel
                 QRCodeScreen(address,balance = accountBalance , balanceUsd = accountBalanceUsd,onDismiss = { showQRCode = false }, address= address )
             }
             if(showPayment){
-                TransactionCard(onDismiss = { showPayment = false }, onSend = { qrCode, amount -> showPayment = false }, balance = accountBalance, balanceUsd = accountBalanceUsd)
+                TransactionCard(viewmodel=viewModel, onDismiss = { showPayment = false }, onSend = { qrCode, amount -> showPayment = false }, balance = accountBalance, balanceUsd = accountBalanceUsd)
             }
 
 }
@@ -525,21 +612,45 @@ fun MainScreen(navController: NavController, viewModel:WalletViewModel,viewModel
 @Composable
 fun VideoView2(
     videoUri: String,
-    isFullScreen: MutableState<Boolean>,
+    isFullScreen: Boolean,
     onFullScreenToggle: (Boolean) -> Unit,
     viewModel: VideoPlayerViewModel = viewModel()
 ) {
     val context = LocalContext.current
     val activity = context as Activity
+    val window = activity.window
 
     val exoPlayer = viewModel.exoPlayer
     val isBuffering = viewModel.isBuffering
 
+    // Zarządzaj pełnym ekranem (immersive mode)
+    LaunchedEffect(isFullScreen) {
+        if (isFullScreen) {
+            window.setDecorFitsSystemWindows(false)
+            WindowCompat.getInsetsController(window, window.decorView).let {
+                it.hide(WindowInsetsCompat.Type.systemBars())
+                it.systemBarsBehavior =
+                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            }
+        } else {
+            window.setDecorFitsSystemWindows(true)
+            WindowCompat.getInsetsController(window, window.decorView).show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+
+    LaunchedEffect(viewModel.exoPlayer) {
+        // Reset player if necessary, especially when returning to the screen
+        if (viewModel.exoPlayer == null) {
+            viewModel.initializePlayer(context, videoUri)
+        }
+    }
+
     Box(
-        modifier = if (isFullScreen.value) {
+        modifier = if (isFullScreen) {
             Modifier
                 .fillMaxSize()
                 .background(Color.Black)
+                .zIndex(2f)
         } else {
             Modifier
                 .fillMaxWidth()
@@ -556,7 +667,14 @@ fun VideoView2(
                     PlayerView(context).apply {
                         player = exoPlayer
                         useController = true
+                        controllerShowTimeoutMs = 3000
+                        controllerAutoShow = true
+                        setShowNextButton(false)
+                        setShowPreviousButton(false)
                     }
+                },
+                update = {
+                    it.player = exoPlayer
                 }
             )
         }
@@ -570,25 +688,21 @@ fun VideoView2(
             )
         }
 
-        // Fullscreen toggle button
+        // 🔁 Toggle Fullscreen Button (zawsze widoczny i dostępny)
         IconButton(
             onClick = {
-                if (isFullScreen.value) {
-                    activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-                } else {
-                    activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-                }
-                onFullScreenToggle(!isFullScreen.value)
+                onFullScreenToggle(!isFullScreen)
             },
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(16.dp)
                 .background(Color.Black.copy(alpha = 0.5f), shape = CircleShape)
+                .zIndex(3f)
         ) {
             Icon(
-                imageVector = if (isFullScreen.value) Icons.Default.FullscreenExit
-                else Icons.Default.Fullscreen,
-                contentDescription = "Toggle Fullscreen"
+                imageVector = if (isFullScreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
+                contentDescription = "Toggle Fullscreen",
+                tint = Color.White
             )
         }
     }
@@ -596,8 +710,11 @@ fun VideoView2(
 
 
 
+
+@RequiresApi(Build.VERSION_CODES.R)
 @Composable
-fun MarketScreen(isLoading: Boolean, onRefresh: () -> Unit, viewModel: WalletViewModel, isFullscreen: MutableState<Boolean>, viewModel2: VideoPlayerViewModel,    onPlayClicked: () -> Unit
+fun MarketScreen(
+    isLoading: Boolean, onRefresh: () -> Unit, viewModel: WalletViewModel, isFullscreen: Boolean, viewModel2: VideoPlayerViewModel, onPlayClicked: () -> Unit
 
 ) {
     val videoUri =
@@ -606,7 +723,9 @@ fun MarketScreen(isLoading: Boolean, onRefresh: () -> Unit, viewModel: WalletVie
     val refreshState = rememberSwipeRefreshState(isRefreshing = isLoading)
     val context = LocalContext.current
     LaunchedEffect(Unit) {
-        viewModel2.initializePlayer(context, "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4")
+        if (viewModel2.exoPlayer == null) {
+            viewModel2.initializePlayer(context, videoUri)
+        }
     }
 
 
@@ -635,14 +754,14 @@ fun MarketScreen(isLoading: Boolean, onRefresh: () -> Unit, viewModel: WalletVie
                 }
                 item {
                     Text("Video Example", modifier = Modifier.padding(16.dp))
-                    if(!isFullscreen.value) {
+                    if(!isFullscreen) {
                         VideoView2(
-                            videoUri= videoUri, // URI of the video to play
-                            isFullScreen= isFullscreen, // Whether the player is in fullscreen mode
-                            onFullScreenToggle= {
-                            isFullscreen.value = true
+                            videoUri = videoUri, // URI of the video to play
+                            isFullScreen = isFullscreen, // Whether the player is in fullscreen mode
+                            onFullScreenToggle = {
+                                viewModel2.isFullscreen=true
                         }, // Callback to toggle fullscreen mode
-                        viewModel= viewModel2 // ViewModel instance
+                        viewModel = viewModel2 // ViewModel instance
                         )
                     }
                 }
@@ -838,12 +957,12 @@ fun Dashboard(
     flag: Boolean,
     onToggleFlag: () -> Unit,
     userName:String,
-    accountBalance: String,
+    accountBalance: Double,
     isLoading: Boolean,
     error: String?,
     transactions: List<Transaction>,
     address: String,
-    accountBalanceUsd: String,
+    accountBalanceUsd: Double,
     onRefresh: () -> Unit,
     onShowQRCode: () -> Unit,
     onShowPayment: ()->Unit,
@@ -940,13 +1059,13 @@ fun Dashboard(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = accountBalance,
+                            text =  "${String.format(Locale.ENGLISH, "%.4f",accountBalance)} XMR",
                             fontSize = 28.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.inverseOnSurface
                         )
                         Text(
-                            text = accountBalanceUsd,
+                            text =  "${String.format(Locale.ENGLISH, "%.4f",accountBalanceUsd)} USD",
                             fontSize = 16.sp,
                             color = MaterialTheme.colorScheme.inverseOnSurface
                         )
@@ -1468,8 +1587,8 @@ fun generateQRCode(text: String, size: Int = 512): Bitmap? {
 @Composable
 fun QRCodeScreen(
     inputText: String,
-    balance: String,
-    balanceUsd: String,
+    balance: Double,
+    balanceUsd: Double,
     onDismiss: () -> Unit,
     address: String
 ) {
@@ -1534,14 +1653,14 @@ fun QRCodeScreen(
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = balance,
+                            text = "${String.format(Locale.ENGLISH, "%.4f",balance)} XMR",
                             fontSize = 28.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = balanceUsd,
+                            text = "${String.format(Locale.ENGLISH, "%.4f",balanceUsd)} USD",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 16.sp
                         )
@@ -1614,16 +1733,16 @@ fun QRCodeScreen(
 fun TransactionCard(
     onDismiss: () -> Unit,
     onSend: (String, String) -> Unit,
-    balance: String,
-    balanceUsd: String
+    balance: Double,
+    balanceUsd: Double,
+    viewmodel: WalletViewModel
 ) {
     val context = LocalContext.current
     var qrCodeText by remember { mutableStateOf("") }
     var amountText by remember { mutableStateOf("") }
 
-    val totalBalance = balance.toDoubleOrNull() ?: 0.0
-    val totalBalanceUsd = balanceUsd.toDoubleOrNull() ?: 0.0
-
+    val totalBalance = balance
+    val totalBalanceUsd = balanceUsd
 
     val amountValue = amountText.replace(',', '.').toDoubleOrNull() ?: 0.0
     val showNewBalance = amountValue > 0.0
@@ -1643,16 +1762,17 @@ fun TransactionCard(
     val selectedAmount = amountText.replace(',', '.')
 
     var isVisible by remember { mutableStateOf(false) }
+    var isLoading by remember { mutableStateOf(false) }  // Loading state
 
     BackHandler {
         onDismiss()
     }
+
     LaunchedEffect(Unit) {
         isVisible = true
         if (!permissionState.status.isGranted) {
             permissionState.launchPermissionRequest()
         }
-
     }
 
     AnimatedVisibility(
@@ -1669,7 +1789,7 @@ fun TransactionCard(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-        ){
+        ) {
             // Dismiss background (outside card)
             Box(
                 modifier = Modifier
@@ -1698,13 +1818,14 @@ fun TransactionCard(
 
                         // Total balance
                         Text("Total Balance", style = MaterialTheme.typography.bodyMedium)
+
                         Text(
-                            "${String.format(Locale.ENGLISH, "%.8f", totalBalance)} XMR",
+                            "${String.format(Locale.ENGLISH, "%.4f", totalBalance)} XMR",
                             style = MaterialTheme.typography.headlineMedium,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            "${String.format(Locale.ENGLISH, "%.8f",totalBalanceUsd)} USD",
+                            "${String.format(Locale.ENGLISH, "%.4f", totalBalanceUsd)} USD",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface
                         )
@@ -1718,12 +1839,12 @@ fun TransactionCard(
                                 color = MaterialTheme.colorScheme.error
                             )
                             Text(
-                                "${String.format(Locale.ENGLISH, "%.8f",newBalance)} XMR",
+                                "${String.format(Locale.ENGLISH, "%.4f", newBalance)} XMR",
                                 style = MaterialTheme.typography.headlineMedium,
                                 color = MaterialTheme.colorScheme.error
                             )
                             Text(
-                                "${String.format(Locale.ENGLISH, "%.8f",newBalanceUsd)} USD",
+                                "${String.format(Locale.ENGLISH, "%.4f", newBalanceUsd)} USD",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.error
                             )
@@ -1793,7 +1914,9 @@ fun TransactionCard(
 
                     OutlinedTextField(
                         value = amountText,
-                        onValueChange = { amountText = it },
+                        onValueChange = { input ->
+                            amountText = input.replace(',', '.') // zamiana , → .
+                        },
                         label = { Text("Amount") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.fillMaxWidth()
@@ -1819,9 +1942,10 @@ fun TransactionCard(
                                     contentPadding = PaddingValues(0.dp),
                                     shape = RoundedCornerShape(8.dp),
                                     colors = ButtonDefaults.outlinedButtonColors(
-                                        containerColor = MaterialTheme.colorScheme.inverseSurface)
+                                        containerColor = MaterialTheme.colorScheme.inverseSurface
+                                    )
                                 ) {
-                                    Text(amount, color=MaterialTheme.colorScheme.surface)
+                                    Text(amount, color = MaterialTheme.colorScheme.surface)
                                 }
                             } else {
                                 OutlinedButton(
@@ -1830,10 +1954,11 @@ fun TransactionCard(
                                     contentPadding = PaddingValues(0.dp),
                                     shape = RoundedCornerShape(8.dp),
                                     colors = ButtonDefaults.outlinedButtonColors(
-                                        containerColor = MaterialTheme.colorScheme.surface)
+                                        containerColor = MaterialTheme.colorScheme.surface
+                                    )
 
                                 ) {
-                                    Text(amount, color=MaterialTheme.colorScheme.onSurface)
+                                    Text(amount, color = MaterialTheme.colorScheme.onSurface)
                                 }
                             }
                         }
@@ -1842,14 +1967,56 @@ fun TransactionCard(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Button(
-                        onClick = { onSend(qrCodeText, amountText) },
+                        onClick = {
+                            val address = qrCodeText.trim()
+                            val amount = amountText.trim().toDoubleOrNull()
+
+                            if (address.isEmpty()) {
+                                Toast.makeText(context, "Address is empty", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+
+                            if (amount == null || amount <= 0.0) {
+                                Toast.makeText(context, "Enter valid amount", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+
+                            // Set loading state
+                            isLoading = true
+                            Log.d("Transaction", "Sending transaction to address: $address with amount: $amount")
+
+                            viewmodel.sendTransaction(
+                                context = context,
+                                address = address,
+                                amount = amount,
+                                onSuccess = {
+                                    // Hide loading spinner and close card
+                                    isLoading = false
+                                    Toast.makeText(context, "Transaction sent!", Toast.LENGTH_SHORT).show()
+                                    onDismiss()
+                                },
+                                onError = { error ->
+                                    // Hide loading spinner and show error
+                                    isLoading = false
+                                    Toast.makeText(context, "Error: $error", Toast.LENGTH_LONG).show()
+                                    onDismiss()
+                                }
+                            )
+                        },
                         shape = RoundedCornerShape(8.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.inverseSurface),
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(48.dp)
                     ) {
-                        Text("Send", color=MaterialTheme.colorScheme.surface)
+                        if (isLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = MaterialTheme.colorScheme.surface
+                            )
+                        } else {
+                            Text("Send", color = MaterialTheme.colorScheme.surface)
+                        }
                     }
                 }
             }

@@ -24,16 +24,16 @@ class VideoPlayerViewModel : ViewModel() {
         private set // Only the ViewModel can modify this
 
     // Whether playback should start automatically
-    var playWhenReady by mutableStateOf(true)
+    var playWhenReady by mutableStateOf(false)
         private set
 
     // Whether the player is currently buffering
     var isBuffering by mutableStateOf(true)
         private set
 
-    /**
-     * Initialize the ExoPlayer if not already created and prepare it to play from [videoUri].
-     */
+    var isFullscreen by mutableStateOf(false)
+    var shouldPlayVideo by mutableStateOf(false)
+
     fun initializePlayer(context: Context, videoUri: String) {
         if (_exoPlayer == null) {
             _exoPlayer = ExoPlayer.Builder(context).build().apply {
@@ -74,9 +74,17 @@ class VideoPlayerViewModel : ViewModel() {
         }
         _exoPlayer = null
     }
+    fun stopPlayer() {
+        exoPlayer?.pause()
+    }
 
+    fun resetPlayer() {
+        exoPlayer?.seekTo(0)
+        exoPlayer?.play()
+    }
     override fun onCleared() {
         super.onCleared()
         releasePlayer()
     }
+
 }

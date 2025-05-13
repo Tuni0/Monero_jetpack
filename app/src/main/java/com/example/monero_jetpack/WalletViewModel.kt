@@ -22,16 +22,36 @@ import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.io.IOException
 import org.json.*  // w razie czego, ale ten wyżej powinien wystarczyć
+import retrofit2.Response
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
+import retrofit2.http.Body
+import retrofit2.http.Header
+import retrofit2.http.POST
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 data class Transaction(val amount: Double, val fee: Double, val type: String)
 data class PricePoint(val timestamp: Long, val price: Double)
+// Model danych
+data class SendTransactionRequest(
+    val address: String,
+    val amount: Double
+)
 
+// API Retrofit
+interface WalletApi {
+    @POST("wallet/XMR/transaction")
+    suspend fun sendTransaction(
+        @Header("Authorization") token: String,
+        @Body request: SendTransactionRequest
+    ): Response<Unit>
+}
 class WalletViewModel : ViewModel() {
 
     private val fetchMutex = Mutex()
@@ -48,8 +68,8 @@ class WalletViewModel : ViewModel() {
     private val _walletDisplayName = MutableStateFlow("Loading...")
     val walletDisplayName: StateFlow<String> = _walletDisplayName
 
-    private val _accountBalance = MutableStateFlow("0.00")
-    val accountBalance: StateFlow<String> = _accountBalance
+    private val _accountBalance = MutableStateFlow(0.0)
+    val accountBalance: StateFlow<Double> = _accountBalance
 
     private val _transactions = MutableStateFlow<List<Transaction>>(emptyList())
     val transactions: StateFlow<List<Transaction>> = _transactions
@@ -57,8 +77,8 @@ class WalletViewModel : ViewModel() {
     private val _accountAddress = MutableStateFlow("Address")
     val accountAddress: StateFlow<String> = _accountAddress
 
-    private val _accountBalanceUsd = MutableStateFlow("")
-    val accountBalanceUsd: StateFlow<String> = _accountBalanceUsd
+    private val _accountBalanceUsd = MutableStateFlow(0.0)
+    val accountBalanceUsd: StateFlow<Double> = _accountBalanceUsd
 
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading
@@ -74,6 +94,69 @@ class WalletViewModel : ViewModel() {
 
     private fun getPrefs(context: Context): SharedPreferences {
         return context.getSharedPreferences("wallet_prefs", Context.MODE_PRIVATE)
+    }
+
+
+    fun sendTransaction(
+        context: Context,
+        address: String,
+        amount: Double,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        val walletId = _selectedWalletId.value ?: return
+        val prefs = getPrefs(context)
+        val walletJson = JSONObject(prefs.getString("wallet_data", null) ?: return)
+        val walletObj = walletJson.optJSONObject(walletId) ?: return
+        val token = walletObj.optString("entropy", null)
+
+        if (token.isNullOrEmpty() || token == "token") {
+            Log.e("WALLET_VM", "Invalid token for wallet: $walletId")
+            _error.value = "Invalid wallet token"
+            return
+        }
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val jsonBody = JSONObject().apply {
+                    put("address", address)
+                    put("amount", amount)
+                }
+
+                val requestBody = jsonBody.toString().toRequestBody("application/json".toMediaTypeOrNull())
+
+                val request = Request.Builder()
+                    .url("https://wallet.goodnodedemo.ovh/wallet/XMR/transaction")
+                    .post(requestBody)
+                    .addHeader("Authorization", token) // No "Bearer"
+                    .build()
+
+                val response = OkHttpClient().newCall(request).execute()
+
+                if (response.isSuccessful) {
+                    withContext(Dispatchers.Main) {
+                        onSuccess()
+                    }
+                } else {
+                    val errorBody = response.body?.string() ?: "Unknown error"
+                    Log.e("WALLET_VM", "Send failed: $errorBody")
+                    withContext(Dispatchers.Main) {
+                        if (response.code == 500) {
+                            onError("Zbyt mało środków na fee")
+
+                        }
+                        else {
+                            onError("Failed: ${response.code} $errorBody")
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("WALLET_VM", "Send error", e)
+                withContext(Dispatchers.Main) {
+                    onError("Exception: ${e.localizedMessage}")
+                }
+            }
+        }
     }
 
     fun fetchXmrPriceHistory() {
@@ -165,10 +248,8 @@ class WalletViewModel : ViewModel() {
         val prefs = getPrefs(context)
         val walletJson = JSONObject(prefs.getString("wallet_data", null) ?: return)
 
-        // 1. próbujemy domyślny
         var currentWallet = walletJson.optString("current_wallet", null)
 
-        // 2. jeśli brak, weź pierwszy z dostępnych
         if (currentWallet.isNullOrEmpty()) {
             val keys = walletJson.keys().asSequence().filter { it != "current_wallet" }.toList()
             currentWallet = keys.firstOrNull()
@@ -347,8 +428,8 @@ class WalletViewModel : ViewModel() {
 
                     withContext(Dispatchers.Main) {
                         _userName.value = usernameFromFirestore
-                        _accountBalance.value = "%.4f XMR".format(confirmedBalance)
-                        _accountBalanceUsd.value = "$%.2f USD".format(balanceUsd)
+                        _accountBalance.value = confirmedBalance
+                        _accountBalanceUsd.value = balanceUsd
                         _transactions.value = inTransactions + outTransactions
                         _accountAddress.value = addressString
                         _isLoading.value = false
