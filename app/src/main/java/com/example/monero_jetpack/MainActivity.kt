@@ -55,6 +55,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.zIndex
 import android.graphics.Bitmap
+import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -164,6 +165,10 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
+import com.airbnb.lottie.compose.LottieAnimation
+import com.airbnb.lottie.compose.LottieCompositionSpec
+import com.airbnb.lottie.compose.animateLottieCompositionAsState
+import com.airbnb.lottie.compose.rememberLottieComposition
 import com.google.firebase.firestore.FirebaseFirestore
 import java.util.Locale
 import kotlinx.coroutines.delay
@@ -407,6 +412,7 @@ fun MainScreen(navController: NavController, viewModel:WalletViewModel,viewModel
     }
 
     var flag by remember { mutableStateOf(false) }
+    var resultState by remember { mutableStateOf<String?>(null) }
 
 
 
@@ -604,8 +610,19 @@ fun MainScreen(navController: NavController, viewModel:WalletViewModel,viewModel
                 QRCodeScreen(address,balance = accountBalance , balanceUsd = accountBalanceUsd,onDismiss = { showQRCode = false }, address= address )
             }
             if(showPayment){
-                TransactionCard(viewmodel=viewModel, onDismiss = { showPayment = false }, onSend = { qrCode, amount -> showPayment = false }, balance = accountBalance, balanceUsd = accountBalanceUsd)
+                TransactionCard(viewmodel=viewModel, onDismiss = { showPayment = false }, onSend = { qrCode, amount -> showPayment = false }, balance = accountBalance, balanceUsd = accountBalanceUsd,setResultState = { resultState = it })
             }
+
+
+        // Animacja po zamknięciu TransactionCard
+        resultState?.let { result ->
+            FeedbackAnimation(
+                isSuccess = result == "success",
+                onAnimationFinished = {
+                    resultState = null
+                }
+            )
+        }
 
 }
 
@@ -1737,7 +1754,8 @@ fun TransactionCard(
     onSend: (String, String) -> Unit,
     balance: Double,
     balanceUsd: Double,
-    viewmodel: WalletViewModel
+    viewmodel: WalletViewModel,
+    setResultState: (String) -> Unit
 ) {
     val context = LocalContext.current
     var qrCodeText by remember { mutableStateOf("") }
@@ -1765,6 +1783,7 @@ fun TransactionCard(
 
     var isVisible by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }  // Loading state
+    var resultState by remember { mutableStateOf<String?>(null) }
 
     BackHandler {
         onDismiss()
@@ -1995,12 +2014,14 @@ fun TransactionCard(
                                     // Hide loading spinner and close card
                                     isLoading = false
                                     Toast.makeText(context, "Transaction sent!", Toast.LENGTH_SHORT).show()
+                                    setResultState("success")
                                     onDismiss()
                                 },
                                 onError = { error ->
                                     // Hide loading spinner and show error
                                     isLoading = false
                                     Toast.makeText(context, "Error: $error", Toast.LENGTH_LONG).show()
+                                    setResultState("error")
                                     onDismiss()
                                 }
                             )
@@ -2019,13 +2040,64 @@ fun TransactionCard(
                         } else {
                             Text("Send", color = MaterialTheme.colorScheme.surface)
                         }
+
+
                     }
                 }
             }
         }
+
     }
+
 }
 
+@Composable
+fun FeedbackAnimation(
+    isSuccess: Boolean,
+    onAnimationFinished: () -> Unit = {}
+) {
+    val context = LocalContext.current
+    val animationRes = if (isSuccess) "konfetti.json" else "sad.json"
+    val soundRes = if (isSuccess) R.raw.sucess else R.raw.error
+
+    val composition by rememberLottieComposition(LottieCompositionSpec.Asset(animationRes))
+    val progress by animateLottieCompositionAsState(
+        composition = composition,
+        iterations = 1,
+        speed = 1.5f,
+        restartOnPlay = false,
+        isPlaying = true
+    )
+
+    // 🔊 Play sound once
+    LaunchedEffect(Unit) {
+        val player = MediaPlayer.create(context, soundRes)
+        player.setOnCompletionListener { it.release() }
+        player.start()
+    }
+
+    // 🎬 Trigger dismiss when animation finishes
+    LaunchedEffect(progress) {
+        if (progress == 1f) {
+            delay(300) // optional short pause
+            onAnimationFinished()
+        }
+    }
+
+    // 🎨 Overlay UI
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.5f)),
+        contentAlignment = Alignment.Center
+    ) {
+        LottieAnimation(
+            composition = composition,
+            progress = { progress },
+            modifier = Modifier.size(300.dp)
+        )
+    }
+}
 
 
 

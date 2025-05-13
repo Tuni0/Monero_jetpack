@@ -116,5 +116,11 @@ dependencies {
     implementation ("androidx.lifecycle:lifecycle-viewmodel-ktx:2.5.1") // if you're using ViewModel
     implementation ("androidx.lifecycle:lifecycle-process:2.5.1")
 
+    // For Lottie animations
+    implementation("com.airbnb.android:lottie-compose:6.1.0")
+
+    // For sounds
+    implementation("androidx.media3:media3-exoplayer:1.3.1")
+
 }
 
