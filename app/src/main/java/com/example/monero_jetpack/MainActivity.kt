@@ -2,6 +2,7 @@ package com.example.monero_jetpack
 import android.Manifest
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -163,6 +164,8 @@ import com.google.accompanist.swiperefresh.rememberSwipeRefreshState
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.SystemBarStyle
 import androidx.browser.trusted.TrustedWebActivityDisplayMode.ImmersiveMode
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
@@ -173,6 +176,7 @@ import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.ShowChart
 import androidx.compose.material.icons.outlined.SwapHoriz
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.viewinterop.AndroidView
@@ -182,6 +186,7 @@ import androidx.media3.ui.PlayerView
 import androidx.navigation.NavController
 import com.google.firebase.firestore.FirebaseFirestore
 import androidx.core.net.toUri
+import java.util.Locale
 
 class MainActivity : ComponentActivity() {
 
@@ -200,6 +205,7 @@ class MainActivity : ComponentActivity() {
             Monero_jetpackTheme {
                 val navController = rememberNavController()
                 val walletViewModel: WalletViewModel = viewModel() // ✅ shared ViewModel
+                val videoPlayerViewModel: VideoPlayerViewModel = viewModel() // ✅ shared ViewModel
 
                 // 👇 auto-login if already signed in
                 val auth = FirebaseAuth.getInstance()
@@ -241,11 +247,15 @@ class MainActivity : ComponentActivity() {
                         composable("login") { LoginScreen(navController) }
                         composable("register") { RegisterScreen(navController) }
                         composable("home") {
-                            MainScreen(navController = navController, viewModel = walletViewModel)
+                            MainScreen(navController = navController, viewModel = walletViewModel, viewModel2 = videoPlayerViewModel)
                         }
                         composable("add_wallet") {
                             AddWalletScreen(navController = navController, viewModel = walletViewModel)
                         }
+                        composable("restore_wallet") {
+                            RestoreWalletScreen(navController, viewModel=walletViewModel)
+                        }
+
                         composable("settings") {
                             SettingsScreen(viewModel = walletViewModel) // ✅ passing it manually
                         }
@@ -270,7 +280,7 @@ data class NavigationItem(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen(navController: NavController, viewModel:WalletViewModel ) {
+fun MainScreen(navController: NavController, viewModel:WalletViewModel,viewModel2: VideoPlayerViewModel ) {
     val accountBalance by viewModel.accountBalance.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val userName by viewModel.userName.collectAsState()
@@ -309,6 +319,7 @@ fun MainScreen(navController: NavController, viewModel:WalletViewModel ) {
     }
     var flag by remember { mutableStateOf(false) }
     val isFullscreen = remember { mutableStateOf(false) }
+    var shouldPlayVideo by remember { mutableStateOf(false) }
 
 
 
@@ -417,212 +428,186 @@ fun MainScreen(navController: NavController, viewModel:WalletViewModel ) {
                         )
 
                         1 -> TransactionsScreen(transactions)
-                        2 -> SwapScreen(navController = navController,viewModel=viewModel) // ✅ THIS is correct
-                        3 -> MarketScreen(isLoading = isLoading, onRefresh = { viewModel.fetchWalletData(context) }, viewModel = viewModel,isFullscreen = isFullscreen )
-                    }
-                }
-            }
-            )
-                // Floating Action Button (FAB) - Placed Last to Ensure Visibility
-                FloatingActionButton(
-                    onClick = { flag = !flag },
-                    containerColor = MaterialTheme.colorScheme.inversePrimary,
-                    contentColor = MaterialTheme.colorScheme.primary,
-                    elevation = FloatingActionButtonDefaults.bottomAppBarFabElevation(),
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd) // FAB Position
-                        .padding(end=20.dp, bottom = navigationBarHeight.value +20.dp)
-                        .zIndex(2f) // Ensure it's above everything, including the dim overlay
-                ) {
-                    Icon(
-                        imageVector = if (flag) Icons.Filled.Clear else Icons.Filled.Add,
-                        contentDescription = "Menu Toggle"
-                    )
-                }
-
-                // Dimming overlay (covers EVERYTHING, including the AppBar and BottomBar)
-                if(flag ||showQRCode||showPayment){
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.5f)) // Dim effect
-                            .clickable { flag = false } // Click outside to dismiss
-                            .zIndex(1f) // Below FAB, above Scaffold
-                    )
-                }
-                if (flag ) {
-
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(bottom = 30.dp, end = 28.dp)
-                            .zIndex(2f) // Above the dim effect
-                    ) {
-                        FloatingMenu(onDismiss = {flag = false},
-                            onShowQRCode = { showQRCode = true  },
-                            onShowPayment = {showPayment = true},
-                            navBarHeight = navigationBarHeight.value // Pass the height here
+                        2 -> SwapScreen(
+                            navController = navController,
+                            viewModel = viewModel
+                        ) // ✅ THIS is correct
+                        3 -> MarketScreen(
+                            isLoading = isLoading,
+                            onRefresh = { viewModel.fetchWalletData(context) },
+                            viewModel = viewModel,
+                            isFullscreen = isFullscreen,
+                            viewModel2 = viewModel2,
+                            onPlayClicked = {
+                                viewModel2.initializePlayer(
+                                    context,
+                                    "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4"
+                                )
+                                shouldPlayVideo = true
+                                isFullscreen.value = true
+                            }
                         )
                     }
-
                 }
-
-        // 🔥 Immersive system UI control
-        ImmersiveMode(isFullscreen.value)
-        // 🔥 Place FULLSCREEN PLAYER on top of everything else
-        if (isFullscreen.value) {
-            FullscreenVideoPlayer(
-                uri = Uri.parse("https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4"),
-                onClose = { isFullscreen.value = false }
-            )
-        }
-
             }
-            // Show QR Code Fullscreen When Activated
-            if (showQRCode) {
-                QRCodeScreen(address, balance = accountBalance , balanceUsd = accountBalanceUsd,onDismiss = { showQRCode = false }, address= address )
-            }
-            if(showPayment){
-                TransactionCard(onDismiss = { showPayment = false }, onSend = { qrCode, amount -> showPayment = false })
-            }
-
-}
-
-@Composable
-fun VideoItem(videoUri: Uri) {
-    val isFullscreen = remember { mutableStateOf(false) }
-
-    if (isFullscreen.value) {
-        FullscreenVideoPlayer(
-            uri = videoUri,
-            onClose = { isFullscreen.value = false }
         )
-    } else {
-        VideoPlayer(
-            uri = videoUri,
-            modifier = Modifier.fillMaxWidth(),
-            onExpandClick = { isFullscreen.value = true }
-        )
-    }
-}
-
-
-
-@Composable
-fun VideoPlayer(
-    uri: Uri,
-    modifier: Modifier = Modifier,
-    onExpandClick: () -> Unit = {}
-) {
-    val context = LocalContext.current
-
-    Box(modifier = modifier) {
-        AndroidView(
-            factory = {
-                PlayerView(context).apply {
-                    player = ExoPlayer.Builder(context).build().apply {
-                        setMediaItem(MediaItem.fromUri(uri))
-                        prepare()
-                        playWhenReady = false
-                    }
-                    useController = true
-                    layoutParams = FrameLayout.LayoutParams(
-                        FrameLayout.LayoutParams.MATCH_PARENT,
-                        FrameLayout.LayoutParams.WRAP_CONTENT
-                    )
-                }
-            },
+        // Floating Action Button (FAB) - Placed Last to Ensure Visibility
+        FloatingActionButton(
+            onClick = { flag = !flag },
+            containerColor = MaterialTheme.colorScheme.inversePrimary,
+            contentColor = MaterialTheme.colorScheme.primary,
+            elevation = FloatingActionButtonDefaults.bottomAppBarFabElevation(),
             modifier = Modifier
-                .fillMaxWidth()
-                .height(200.dp)
-        )
-
-        IconButton(
-            onClick = onExpandClick,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(8.dp)
-                .background(Color.Black.copy(alpha = 0.4f), shape = CircleShape)
+                .align(Alignment.BottomEnd) // FAB Position
+                .padding(end = 20.dp, bottom = navigationBarHeight.value + 20.dp)
+                .zIndex(2f) // Ensure it's above everything, including the dim overlay
         ) {
             Icon(
-                imageVector = Icons.Default.Fullscreen, // ⛶ icon
-                contentDescription = "Expand",
-                tint = Color.White
+                imageVector = if (flag) Icons.Filled.Clear else Icons.Filled.Add,
+                contentDescription = "Menu Toggle"
             )
         }
-    }
-}
 
-@Composable
-fun ImmersiveMode(isFullscreen: Boolean) {
-    val activity = LocalContext.current as Activity
-    SideEffect {
-        if (isFullscreen) {
-            activity.window.decorView.systemUiVisibility = (
-                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                            or View.SYSTEM_UI_FLAG_FULLSCREEN
-                            or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                    )
-        } else {
-            activity.window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
+        // Dimming overlay (covers EVERYTHING, including the AppBar and BottomBar)
+        if (flag || showQRCode || showPayment) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.5f)) // Dim effect
+                    .clickable { flag = false } // Click outside to dismiss
+                    .zIndex(1f) // Below FAB, above Scaffold
+            )
         }
+        if (flag) {
+
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(bottom = 30.dp, end = 28.dp)
+                    .zIndex(2f) // Above the dim effect
+            ) {
+                FloatingMenu(
+                    onDismiss = { flag = false },
+                    onShowQRCode = { showQRCode = true },
+                    onShowPayment = { showPayment = true },
+                    navBarHeight = navigationBarHeight.value // Pass the height here
+                )
+            }
+
+        }
+
     }
+        // 🔥 Place FULLSCREEN PLAYER on top of everything else
+        if (shouldPlayVideo && isFullscreen.value) {
+            VideoView2(
+                videoUri = "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4",
+                onFullScreenToggle = {
+                    isFullscreen.value = false
+                    shouldPlayVideo = false
+                },
+                isFullScreen = isFullscreen,
+                viewModel = viewModel2
+            )
+        }
+
+
+
+            // Show QR Code Fullscreen When Activated
+            if (showQRCode) {
+                QRCodeScreen(address,balance = accountBalance , balanceUsd = accountBalanceUsd,onDismiss = { showQRCode = false }, address= address )
+            }
+            if(showPayment){
+                TransactionCard(onDismiss = { showPayment = false }, onSend = { qrCode, amount -> showPayment = false }, balance = accountBalance, balanceUsd = accountBalanceUsd)
+            }
+
 }
 
 @Composable
-fun FullscreenVideoPlayer(
-    uri: Uri,
-    onClose: () -> Unit
+fun VideoView2(
+    videoUri: String,
+    isFullScreen: MutableState<Boolean>,
+    onFullScreenToggle: (Boolean) -> Unit,
+    viewModel: VideoPlayerViewModel = viewModel()
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize().zIndex(99f)
-            .background(Color.Black)
-    ) {
-        AndroidView(
-            factory = { context ->
-                PlayerView(context).apply {
-                    player = ExoPlayer.Builder(context).build().apply {
-                        setMediaItem(MediaItem.fromUri(uri))
-                        prepare()
-                        playWhenReady = true
-                    }
-                    useController = true
-                    layoutParams = FrameLayout.LayoutParams(
-                        FrameLayout.LayoutParams.MATCH_PARENT,
-                        FrameLayout.LayoutParams.MATCH_PARENT
-                    )
-                }
-            },
-            modifier = Modifier.fillMaxSize()
-        )
+    val context = LocalContext.current
+    val activity = context as Activity
 
+    val exoPlayer = viewModel.exoPlayer
+    val isBuffering = viewModel.isBuffering
+
+    Box(
+        modifier = if (isFullScreen.value) {
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+        } else {
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f)
+                .background(Color.Black)
+                .clip(RoundedCornerShape(12.dp))
+                .border(0.5.dp, Color.White, RoundedCornerShape(12.dp))
+        }
+    ) {
+        if (exoPlayer != null) {
+            AndroidView(
+                modifier = Modifier.matchParentSize(),
+                factory = {
+                    PlayerView(context).apply {
+                        player = exoPlayer
+                        useController = true
+                    }
+                }
+            )
+        }
+
+        if (isBuffering) {
+            CircularProgressIndicator(
+                modifier = Modifier
+                    .size(48.dp)
+                    .align(Alignment.Center),
+                color = Color.White
+            )
+        }
+
+        // Fullscreen toggle button
         IconButton(
-            onClick = onClose,
+            onClick = {
+                if (isFullScreen.value) {
+                    activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                } else {
+                    activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                }
+                onFullScreenToggle(!isFullScreen.value)
+            },
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(16.dp)
                 .background(Color.Black.copy(alpha = 0.5f), shape = CircleShape)
         ) {
             Icon(
-                imageVector = Icons.Default.FullscreenExit,
-                contentDescription = "Exit Fullscreen",
-                tint = Color.White
+                imageVector = if (isFullScreen.value) Icons.Default.FullscreenExit
+                else Icons.Default.Fullscreen,
+                contentDescription = "Toggle Fullscreen"
             )
         }
     }
 }
 
 
+
 @Composable
-fun MarketScreen(isLoading: Boolean, onRefresh: () -> Unit, viewModel: WalletViewModel, isFullscreen: MutableState<Boolean>
+fun MarketScreen(isLoading: Boolean, onRefresh: () -> Unit, viewModel: WalletViewModel, isFullscreen: MutableState<Boolean>, viewModel2: VideoPlayerViewModel,    onPlayClicked: () -> Unit
+
 ) {
     val videoUri =
-        "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4".toUri()
-    val isFullscreen = remember { mutableStateOf(false) }
+        "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4"
 
     val refreshState = rememberSwipeRefreshState(isRefreshing = isLoading)
-
+    val context = LocalContext.current
+    LaunchedEffect(Unit) {
+        viewModel2.initializePlayer(context, "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4")
+    }
 
 
     Box(Modifier.fillMaxSize()) {
@@ -650,22 +635,22 @@ fun MarketScreen(isLoading: Boolean, onRefresh: () -> Unit, viewModel: WalletVie
                 }
                 item {
                     Text("Video Example", modifier = Modifier.padding(16.dp))
-                    VideoPlayer(
-                        uri = videoUri,
-                        onExpandClick = { isFullscreen.value = true }
-                    )
+                    if(!isFullscreen.value) {
+                        VideoView2(
+                            videoUri= videoUri, // URI of the video to play
+                            isFullScreen= isFullscreen, // Whether the player is in fullscreen mode
+                            onFullScreenToggle= {
+                            isFullscreen.value = true
+                        }, // Callback to toggle fullscreen mode
+                        viewModel= viewModel2 // ViewModel instance
+                        )
+                    }
                 }
 
             }
         }
 
-        // Show fullscreen on top
-        if (isFullscreen.value) {
-            FullscreenVideoPlayer(
-                uri = videoUri,
-                onClose = { isFullscreen.value = false }
-            )
-        }
+
     }
 
 }
@@ -1629,13 +1614,16 @@ fun QRCodeScreen(
 fun TransactionCard(
     onDismiss: () -> Unit,
     onSend: (String, String) -> Unit,
+    balance: String,
+    balanceUsd: String
 ) {
     val context = LocalContext.current
     var qrCodeText by remember { mutableStateOf("") }
     var amountText by remember { mutableStateOf("") }
 
-    val totalBalance = 2.45
-    val totalBalanceUsd = 491.22
+    val totalBalance = balance.toDoubleOrNull() ?: 0.0
+    val totalBalanceUsd = balanceUsd.toDoubleOrNull() ?: 0.0
+
 
     val amountValue = amountText.replace(',', '.').toDoubleOrNull() ?: 0.0
     val showNewBalance = amountValue > 0.0
@@ -1711,12 +1699,12 @@ fun TransactionCard(
                         // Total balance
                         Text("Total Balance", style = MaterialTheme.typography.bodyMedium)
                         Text(
-                            "${"%.2f".format(totalBalance)} XMR",
+                            "${String.format(Locale.ENGLISH, "%.8f", totalBalance)} XMR",
                             style = MaterialTheme.typography.headlineMedium,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            "$ ${"%.2f".format(totalBalanceUsd)} USD",
+                            "${String.format(Locale.ENGLISH, "%.8f",totalBalanceUsd)} USD",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface
                         )
@@ -1730,12 +1718,12 @@ fun TransactionCard(
                                 color = MaterialTheme.colorScheme.error
                             )
                             Text(
-                                "${"%.2f".format(newBalance)} XMR",
+                                "${String.format(Locale.ENGLISH, "%.8f",newBalance)} XMR",
                                 style = MaterialTheme.typography.headlineMedium,
                                 color = MaterialTheme.colorScheme.error
                             )
                             Text(
-                                "$ ${"%.2f".format(newBalanceUsd)} USD",
+                                "${String.format(Locale.ENGLISH, "%.8f",newBalanceUsd)} USD",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.error
                             )

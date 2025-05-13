@@ -26,11 +26,10 @@
             android:label="@string/settings"
             android:theme="@style/Theme.Monero_jetpack" />
         <activity
-            android:name=".UserLoginActivity"
-            android:exported="false"
-            android:theme="@style/Theme.Monero_jetpack" />
-        <activity
             android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:screenOrientation="unspecified"
+            android:resizeableActivity="true"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

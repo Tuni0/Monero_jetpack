@@ -174,7 +174,29 @@ fun AddWalletScreen(navController: NavController, viewModel: WalletViewModel) {
         ) {
             Text("Create")
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
+        OrDivider()
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Button(
+            onClick = {
+                navController.navigate("restore_wallet")
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color.Black,
+                contentColor = Color.White
+            ),
+            shape = RoundedCornerShape(10.dp)
+        ) {
+            Text("Restore existing wallet")
+        }
+
     }
+
 
     if (showMnemonicDialog.value) {
         MnemonicPopup(
@@ -228,4 +250,30 @@ fun MnemonicPopup(mnemonic: String, onClose: () -> Unit) {
             }
         }
     )
+}
+
+@Composable
+fun OrDivider(modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Divider(
+            modifier = Modifier
+                .weight(1f)
+                .height(1.dp),
+            color = Color.Gray
+        )
+        Text(
+            text = "or",
+            modifier = Modifier.padding(horizontal = 8.dp),
+            color = Color.Gray
+        )
+        Divider(
+            modifier = Modifier
+                .weight(1f)
+                .height(1.dp),
+            color = Color.Gray
+        )
+    }
 }
