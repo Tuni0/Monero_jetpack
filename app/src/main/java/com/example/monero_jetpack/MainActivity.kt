@@ -609,6 +609,8 @@ fun MainScreen(navController: NavController, viewModel:WalletViewModel,viewModel
 
 }
 
+@androidx.annotation.OptIn(UnstableApi::class)
+@RequiresApi(Build.VERSION_CODES.R)
 @Composable
 fun VideoView2(
     videoUri: String,
