@@ -411,7 +411,7 @@ fun MainScreen(navController: NavController, viewModel:WalletViewModel,viewModel
 
     var flag by remember { mutableStateOf(false) }
     var resultState by remember { mutableStateOf<String?>(null) }
-
+    val rawId = R.raw.monero
 
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -532,7 +532,7 @@ fun MainScreen(navController: NavController, viewModel:WalletViewModel,viewModel
                             onPlayClicked = {
                                 viewModel2.initializePlayer(
                                     context,
-                                    R.raw.monero.toString()
+                                    Uri.parse("android.resource://${context.packageName}/${R.raw.monero}").toString()
                                 )
                                 viewModel2.shouldPlayVideo = true
                                 viewModel2.isFullscreen = true
@@ -590,7 +590,7 @@ fun MainScreen(navController: NavController, viewModel:WalletViewModel,viewModel
     }
         if (viewModel2.isFullscreen) {
             VideoView2(
-                videoUri = "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4",
+                videoUri = Uri.parse("android.resource://${context.packageName}/${R.raw.monero}").toString(),
                 onFullScreenToggle = {
                     viewModel2.isFullscreen = false
                     viewModel2.shouldPlayVideo = false
@@ -728,11 +728,13 @@ fun MarketScreen(
     isLoading: Boolean, onRefresh: () -> Unit, viewModel: WalletViewModel, isFullscreen: Boolean, viewModel2: VideoPlayerViewModel, onPlayClicked: () -> Unit
 
 ) {
-    val videoUri =
-        "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4"
+
+
 
     val refreshState = rememberSwipeRefreshState(isRefreshing = isLoading)
     val context = LocalContext.current
+    val videoUri =
+        Uri.parse("android.resource://${context.packageName}/${R.raw.monero}").toString()
     LaunchedEffect(Unit) {
         if (viewModel2.exoPlayer == null) {
             viewModel2.initializePlayer(context, videoUri)
