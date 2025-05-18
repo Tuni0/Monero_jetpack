@@ -425,12 +425,13 @@ fun MainScreen(navController: NavController, viewModel:WalletViewModel,viewModel
                     title = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Image(
-                                painter = painterResource(id = R.drawable.logo_1),
+                                painter = painterResource(id = R.drawable.logo2),
                                 contentDescription = "Monero Logo",
                                 contentScale = ContentScale.Fit,
                                 modifier = Modifier
-                                    .size(20.dp)
-                                    .clip(CircleShape), // Optional for circular background
+                                    .size(24.dp)
+                                    .clip(CircleShape) // Optional for circular background
+                                    .padding(end = 2.dp),
                                 colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Color.White)
                             )
                             Text(text = "Monero Wallet", fontSize = 25.sp)

@@ -45,6 +45,7 @@ fun AddWalletScreen(navController: NavController, viewModel: WalletViewModel) {
     val mnemonicValue = remember { mutableStateOf("") }
     val walletName = remember { mutableStateOf("") }
 
+    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)){
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -204,6 +205,7 @@ fun AddWalletScreen(navController: NavController, viewModel: WalletViewModel) {
         ) {
             Text("Restore existing wallet")
         }
+    }
     }
 
     // Pokazuje okno z mnemonic po utworzeniu portfela

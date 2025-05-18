@@ -1,6 +1,8 @@
 package com.example.monero_jetpack
 import android.widget.Toast
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
@@ -24,77 +26,80 @@ fun RestoreWalletScreen(navController: NavController, viewModel: WalletViewModel
     val mnemonicInput = remember { mutableStateOf("") }
     val walletName = remember { mutableStateOf("") }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        // Nagłówek
-        Text("Restore Wallet", fontSize = 28.sp, fontWeight = FontWeight.Bold)
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Nazwa portfela
-        OutlinedTextField(
-            value = walletName.value,
-            onValueChange = { walletName.value = it },
-            label = { Text("Wallet Name") },
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        OutlinedTextField(
-            value = mnemonicInput.value,
-            onValueChange = { mnemonicInput.value = it },
-            label = { Text("Enter your 25-word mnemonic") },
+    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(150.dp),
-            singleLine = false,
-            maxLines = 5
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Przycisk przywracania portfela
-        Button(
-            onClick = {
-                val mnemonic = mnemonicInput.value.trim()
-                val name = walletName.value.trim()
-
-                if (mnemonic.isBlank() || name.isBlank()) {
-                    Toast.makeText(context, "All fields required", Toast.LENGTH_SHORT).show()
-                    return@Button
-                }
-
-                // Wywołanie funkcji przywracającej w ViewModelu
-                viewModel.restoreWallet(
-                    context = context,
-                    mnemonic = mnemonic,
-                    walletName = name,
-                    onSuccess = {
-                        // Jeśli się uda – przechodzimy do ekranu głównego
-                        navController.navigate("home") {
-                            popUpTo("restore_wallet") { inclusive = true }
-                        }
-                    },
-                    onError = { errorMsg ->
-                        // Jeśli się nie uda – pokazujemy komunikat
-                        Toast.makeText(context, errorMsg, Toast.LENGTH_LONG).show()
-                    }
-                )
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(50.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color.Black,
-                contentColor = Color.White
-            )
+                .fillMaxSize()
+                .padding(24.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("Restore Wallet")
+            // Nagłówek
+            Text("Restore Wallet", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.inverseSurface)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Nazwa portfela
+            OutlinedTextField(
+                value = walletName.value,
+                onValueChange = { walletName.value = it },
+                label = { Text("Wallet Name") },
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            OutlinedTextField(
+                value = mnemonicInput.value,
+                onValueChange = { mnemonicInput.value = it },
+                label = { Text("Enter your 25-word mnemonic") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(150.dp),
+                singleLine = false,
+                maxLines = 5
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Przycisk przywracania portfela
+            Button(
+                onClick = {
+                    val mnemonic = mnemonicInput.value.trim()
+                    val name = walletName.value.trim()
+
+                    if (mnemonic.isBlank() || name.isBlank()) {
+                        Toast.makeText(context, "All fields required", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
+
+                    // Wywołanie funkcji przywracającej w ViewModelu
+                    viewModel.restoreWallet(
+                        context = context,
+                        mnemonic = mnemonic,
+                        walletName = name,
+                        onSuccess = {
+                            // Jeśli się uda – przechodzimy do ekranu głównego
+                            navController.navigate("home") {
+                                popUpTo("restore_wallet") { inclusive = true }
+                            }
+                        },
+                        onError = { errorMsg ->
+                            // Jeśli się nie uda – pokazujemy komunikat
+                            Toast.makeText(context, errorMsg, Toast.LENGTH_LONG).show()
+                        }
+                    )
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.inverseSurface,
+                    contentColor = MaterialTheme.colorScheme.inverseOnSurface
+                ),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Text("Restore Wallet")
+            }
         }
     }
 }
